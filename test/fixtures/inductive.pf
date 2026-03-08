@@ -1,0 +1,43 @@
+-- Bool
+data Bool : Type where
+  { true  : Bool
+  | false : Bool
+  }
+
+-- Nat
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Bool elimination: if-then-else
+boolElim : Bool -> Type -> Type -> Type
+         = \(b : Bool) -> \(T : Type) -> \(F : Type) ->
+             match b return (\(_ : Bool) -> Type) with
+             { true  -> T
+             | false -> F
+             }
+
+-- Boolean not
+not : Bool -> Bool
+    = \(b : Bool) ->
+        match b return (\(_ : Bool) -> Bool) with
+        { true  -> false
+        | false -> true
+        }
+
+-- Nat predecessor (pred zero = zero)
+pred : Nat -> Nat
+     = \(n : Nat) ->
+         match n return (\(_ : Nat) -> Nat) with
+         { zero   -> zero
+         | succ m -> m
+         }
+
+-- isZero
+isZero : Nat -> Bool
+       = \(n : Nat) ->
+           match n return (\(_ : Nat) -> Bool) with
+           { zero   -> true
+           | succ _ -> false
+           }

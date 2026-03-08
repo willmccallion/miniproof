@@ -117,17 +117,25 @@ infer ctx = \case
   RMatch scrut motiveRaw branches -> do
     -- Infer the scrutinee type to find which data type it is.
     (scrut', scrutTy) <- infer ctx scrut
-    -- The motive P has type (D -> Type) or similar; here we treat it as a term
-    -- we check against (scrutTy -> Type k) — but since we don't know k, just infer.
-    (motive', motiveTy) <- infer ctx motiveRaw
-    -- The motive's return type when applied to scrut gives the result type.
-    retTy <- case motiveTy of
-      VPi _ _dom bCl -> pure (closureApply bCl (eval (ctxEnv ctx) scrut'))
-      other          -> Left (ExpectedPi (quote (ctxLvl ctx) other))
+    -- Elaborate the motive: it maps each value of the scrutinee's type to a type.
+    (motive', _motiveTy) <- infer ctx motiveRaw
+    -- The result type of the match is: motive applied to the scrutinee.
+    let motiveVal = eval (ctxEnv ctx) motive'
+        scrutVal  = eval (ctxEnv ctx) scrut'
+        retTy     = appVal motiveVal scrutVal
     -- Find the data declaration for the scrutinee's type.
     dataDecl <- resolveDataDecl ctx scrutTy
     branches' <- checkBranches ctx dataDecl branches motive' scrutTy
     pure (Match scrut' motive' branches', retTy)
+
+  -- Lambda with explicit type annotation on binder: infer the full Pi type.
+  RLam n aTy body -> do
+    aTy' <- checkType ctx aTy
+    let aTyVal = eval (ctxEnv ctx) aTy'
+    let ctx' = ctxBind ctx n aTyVal
+    (body', bodyTy) <- infer ctx' body
+    let bCl = Closure (ctxEnv ctx) (quote (ctxLvl ctx + 1) bodyTy)
+    pure (Lam n body', VPi n aTyVal bCl)
 
   other -> Left (CannotInfer other)
 
@@ -278,20 +286,17 @@ checkProgram = go emptyCtx
         -- Check the kind of the type constructor
         kind' <- checkType ctx rawKind
         let kindVal = eval (ctxEnv ctx) kind'
-        -- Elaborate each constructor
-        conDecls <- mapM (elaborateCon ctx) rawCons
-        let dataDecl = DataDecl typeName kindVal conDecls
-        -- Add the data type to the context as a defined constant.
-        -- The type constructor itself lives at the top level; we add it
-        -- as a variable of type `kindVal` so it can appear in types.
-        -- Its "value" is VCon typeName [] (it's a type-level constant).
+        -- Add the type constructor to ctx BEFORE elaborating constructors,
+        -- so that constructor types like "zero : Nat" can refer to the type.
         let tyConVal = VCon typeName []
-        let ctx' = (ctxDefine ctx typeName kindVal tyConVal)
-                     { ctxData = dataDecl : ctxData ctx }
-        -- Also add each constructor to the context as a defined term.
+        let ctxWithTyCon = ctxDefine ctx typeName kindVal tyConVal
+        -- Elaborate each constructor in the context that already has the type.
+        conDecls <- mapM (elaborateCon ctxWithTyCon) rawCons
+        let dataDecl = DataDecl typeName kindVal conDecls
+        -- Register the data declaration, then add each constructor.
+        let ctx' = ctxWithTyCon { ctxData = dataDecl : ctxData ctxWithTyCon }
         ctx'' <- foldl addConToCtx (Right ctx') conDecls
         rest' <- go ctx'' rest
-        -- We don't emit elaborated terms for data declarations in the output.
         pure rest'
 
     addConToCtx :: Either TypeError Ctx -> ConDecl -> Either TypeError Ctx
