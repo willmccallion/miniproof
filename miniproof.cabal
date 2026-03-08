@@ -1,0 +1,60 @@
+cabal-version:      3.0
+name:               miniproof
+version:            0.1.0.0
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Will
+maintainer:         will.mccallion@icloud.com
+build-type:         Simple
+
+common warnings
+    ghc-options: -Wall -Wno-name-shadowing
+
+common optimised
+    ghc-options: -O2
+
+library
+    import:           warnings, optimised
+    exposed-modules:
+        Prover.Syntax
+        Prover.Eval
+        Prover.Check
+        Prover.Parser
+        Prover.Pretty
+        Prover.Env
+    hs-source-dirs:   src
+    build-depends:
+        base            ^>=4.20.2.0,
+        containers      >=0.7,
+        megaparsec      >=9.6,
+        text            >=2.1,
+        mtl             >=2.3
+    default-language: GHC2024
+
+executable miniproof
+    import:           warnings, optimised
+    main-is:          Main.hs
+    hs-source-dirs:   app
+    build-depends:
+        base            ^>=4.20.2.0,
+        miniproof,
+        text            >=2.1,
+        optparse-applicative >=0.18
+    default-language: GHC2024
+
+test-suite miniproof-test
+    import:           warnings
+    default-language: GHC2024
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    other-modules:
+        Test.Eval
+        Test.Check
+        Test.Parser
+    build-depends:
+        base            ^>=4.20.2.0,
+        miniproof,
+        text            >=2.1,
+        tasty           >=1.5,
+        tasty-hunit     >=0.10

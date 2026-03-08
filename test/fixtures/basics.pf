@@ -1,0 +1,27 @@
+-- Identity function
+id : forall (A : Type) -> A -> A
+   = \(A : Type) -> \(a : A) -> a
+
+-- Constant function (flip of const is called "discard" or "kestrel")
+const : forall (A : Type) -> forall (B : Type) -> A -> B -> A
+      = \(A : Type) -> \(B : Type) -> \(a : A) -> \(b : B) -> a
+
+-- Function composition
+compose : forall (A : Type) -> forall (B : Type) -> forall (C : Type) -> (B -> C) -> (A -> B) -> A -> C
+        = \(A : Type) -> \(B : Type) -> \(C : Type) -> \(g : B -> C) -> \(f : A -> B) -> \(x : A) -> g (f x)
+
+-- Flip: swap arguments
+flip : forall (A : Type) -> forall (B : Type) -> forall (C : Type) -> (A -> B -> C) -> B -> A -> C
+     = \(A : Type) -> \(B : Type) -> \(C : Type) -> \(f : A -> B -> C) -> \(b : B) -> \(a : A) -> f a b
+
+-- Modus ponens: if A and A implies B, then B
+mp : forall (A : Type) -> forall (B : Type) -> A -> (A -> B) -> B
+   = \(A : Type) -> \(B : Type) -> \(a : A) -> \(f : A -> B) -> f a
+
+-- Identity at universe level 1 (needed to apply id to id)
+id1 : forall (A : Type 1) -> A -> A
+    = \(A : Type 1) -> \(a : A) -> a
+
+-- Apply id1 to id itself
+selfApp : forall (A : Type) -> A -> A
+        = id1 (forall (A : Type) -> A -> A) id

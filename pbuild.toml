@@ -1,0 +1,57 @@
+[config]
+default = "build"
+
+[vars]
+cabal  = "cabal"
+prover = { eval = "cabal list-bin miniproof" }
+
+[build]
+group       = "Build"
+description = "Build the project"
+type        = "task"
+inputs      = ["src/**/*.hs", "app/**/*.hs", "miniproof.cabal"]
+command     = ["{{cabal}}", "build", "all"]
+
+[test]
+group       = "Build"
+description = "Run tests"
+type        = "task"
+deps        = ["build"]
+inputs      = ["test/**/*.hs", "test/fixtures/*.pf"]
+cache       = false
+command     = ["{{cabal}}", "test", "all"]
+
+[run]
+group       = "Build"
+description = "Check a proof file — pb run -- file.pf"
+type        = "task"
+deps        = ["build"]
+command     = ["{{cabal}}", "run", "miniproof", "--", "{{args}}"]
+
+[check-fixtures]
+group       = "Build"
+description = "Check all fixture proof files"
+type        = "task"
+deps        = ["build"]
+for_each    = "test/fixtures/*.pf"
+command     = ["{{prover}}", "{{file}}"]
+
+[repl]
+group       = "Dev"
+description = "Start a GHCi REPL"
+type        = "task"
+tty         = true
+command     = ["{{cabal}}", "repl"]
+
+[clean]
+group       = "Dev"
+description = "Remove cabal build artifacts"
+type        = "task"
+command     = ["{{cabal}}", "clean"]
+
+[format]
+group       = "Dev"
+description = "Format source files with fourmolu"
+type        = "task"
+shell       = true
+command     = ["fourmolu --mode inplace $(find src app test -name '*.hs')"]
