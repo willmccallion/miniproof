@@ -26,6 +26,9 @@ data Raw
   | RCon Name [Raw]             -- constructor application: C e1 .. en
   | RMatch Raw Raw [(Name, [Name], Raw)]
     -- match t return P with { C x1..xn -> e | ... }
+  | RFix Name Raw Name Raw Raw
+    -- fix (f : A) (x : B) = body
+    -- f is the self-reference, x is the argument binder
   deriving (Show, Eq)
 
 -- | A raw constructor declaration: name followed by field types.
@@ -53,6 +56,12 @@ data Term
   | Match Term Term [(Name, Int, Term)]
     -- match scrutinee return motive with branches
     -- each branch: (constructor name, arity, body with arity binders)
+  | Fix Name Name Term Term Term
+    -- Fix f x argTy retTy body
+    -- f: self-reference name, x: argument name
+    -- argTy: type of x, retTy: return type (may mention x)
+    -- body: has f at index 1, x at index 0
+    -- Represents: fix f x = body, with type (x : argTy) -> retTy
   deriving (Show, Eq)
 
 -- ---------------------------------------------------------------------------
@@ -68,6 +77,11 @@ data Val
   | VCon Name [Val]             -- constructor value
   | VMatch Val Val [(Name, Int, Closure)]
     -- stuck match (scrutinee is neutral)
+  | VFix Name Closure
+    -- VFix f bodyClosure
+    -- bodyClosure env body where body has f at index 1, x at index 0
+    -- Applying (VFix f cl) to arg evaluates body with:
+    --   env[0] = arg, env[1] = (VFix f cl)  (the self-reference)
 
 data Closure = Closure Env Term
 

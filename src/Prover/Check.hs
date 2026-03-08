@@ -137,6 +137,39 @@ infer ctx = \case
     let bCl = Closure (ctxEnv ctx) (quote (ctxLvl ctx + 1) bodyTy)
     pure (Lam n body', VPi n aTyVal bCl)
 
+  -- fix (f : fTy) (x : argTy) = body
+  -- fTy must be of the form (x : argTy) -> retTy.
+  -- The body is checked with f and x in scope.
+  -- Result type is (x : argTy) -> retTy.
+  RFix f rawFTy x rawArgTy rawBody -> do
+    -- Elaborate the declared type of f.
+    fTy' <- checkType ctx rawFTy
+    let fTyVal = eval (ctxEnv ctx) fTy'
+    -- fTy must be a Pi; extract domain (argTy) and codomain closure (retTy).
+    (argTyVal, retCl) <- case fTyVal of
+      VPi _ dom bCl -> pure (dom, bCl)
+      other         -> Left (ExpectedPi (quote (ctxLvl ctx) other))
+    -- Check that the explicit argTy annotation matches the domain of fTy.
+    argTy' <- checkType ctx rawArgTy
+    let argTyVal' = eval (ctxEnv ctx) argTy'
+    let l = ctxLvl ctx
+    if not (convCheck l argTyVal argTyVal')
+      then Left (TypeMismatch (quote l argTyVal) (quote l argTyVal'))
+      else pure ()
+    -- We need body to have: Var 0 = x (arg), Var 1 = f (self).
+    -- Bind x at level l (will be index 1 after we add f on top).
+    -- Bind f at level l+1 (will be index 0, innermost).
+    let ctxX  = ctxBind ctx  x argTyVal  -- x at level l
+        ctxXF = ctxBind ctxX f fTyVal    -- f at level l+1, index 0 in body; x at index 1
+    -- Compute retTy by applying retCl to the variable x (at level l).
+    let retTyVal = closureApply retCl (VVar l)
+    -- Record retTy as a term (closed over x, i.e. at level l+1).
+    let retTy'   = quote (l + 1) retTyVal
+    -- Check the body: in ctxXF, x=1, f=0; retTyVal has x free as VVar l.
+    -- retTyVal lives at level l+1 (has VVar l which becomes index 1 at depth 2).
+    body' <- check ctxXF rawBody retTyVal
+    pure (Fix f x argTy' retTy' body', fTyVal)
+
   other -> Left (CannotInfer other)
 
 -- ---------------------------------------------------------------------------

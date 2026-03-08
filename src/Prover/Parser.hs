@@ -37,7 +37,7 @@ braces :: Parser a -> Parser a
 braces = between (symbol "{") (symbol "}")
 
 reserved :: [Text]
-reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with"]
+reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with", "fix"]
 
 ident :: Parser Text
 ident = lexeme $ try $ do
@@ -53,7 +53,7 @@ ident = lexeme $ try $ do
 -- Precedence: let/lam/pi/match bind loosest, application is left-assoc, atoms are tightest.
 
 rawTerm :: Parser Raw
-rawTerm = choice [pLam, pLet, pPi, pMatch, pFunOrApp]
+rawTerm = choice [pLam, pLet, pPi, pMatch, pFix, pFunOrApp]
 
 pAtom :: Parser Raw
 pAtom = choice
@@ -126,6 +126,25 @@ pLet = do
   _ <- symbol "in"
   body <- rawTerm
   pure (RLet n ty e body)
+
+-- | Fix expression:
+--   fix (f : fTy) (x : argTy) = body
+pFix :: Parser Raw
+pFix = do
+  _ <- symbol "fix"
+  _ <- symbol "("
+  f <- ident
+  _ <- symbol ":"
+  fTy <- rawTerm
+  _ <- symbol ")"
+  _ <- symbol "("
+  x <- ident
+  _ <- symbol ":"
+  argTy <- rawTerm
+  _ <- symbol ")"
+  _ <- symbol "="
+  body <- rawTerm
+  pure (RFix f fTy x argTy body)
 
 -- | Match expression:
 --   match t return P with { C1 x1 .. -> e1 | C2 x1 .. -> e2 }

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Prover.Eval
   ( eval
   , quote
@@ -27,10 +28,25 @@ eval env = \case
     -- Evaluate it in the current env to get a VLam chain, then apply con args.
     matchVal (eval env t) (eval env motive)
       [(c, ar, env, b) | (c, ar, b) <- branches]
+  Fix f _x _argTy _retTy body ->
+    -- Build the self-referential closure.
+    -- body has: index 0 = x (argument), index 1 = f (self).
+    -- VFix stores the closure over the *body*, not the whole function.
+    -- Applying VFix to an arg gives: eval (arg : self : env) body
+    let self = VFix f (Closure env body)
+    in self
 
 appVal :: Val -> Val -> Val
-appVal (VLam _ cl) arg = closureApply cl arg
-appVal f           arg = VApp f arg
+appVal (VLam _ cl)    arg = closureApply cl arg
+appVal (VFix _ cl)    arg = fixApply cl arg
+appVal f              arg = VApp f arg
+
+-- | Unroll one step of a fixpoint and apply to arg.
+-- body has index 0 = x, index 1 = f (self-reference).
+fixApply :: Closure -> Val -> Val
+fixApply cl@(Closure env body) arg =
+  let self = VFix "_fix" cl
+  in eval (arg : self : env) body
 
 closureApply :: Closure -> Val -> Val
 closureApply (Closure env body) val = eval (val : env) body
@@ -61,6 +77,15 @@ quote l = \case
   VPi n a cl -> Pi n (quote l a) (quote (l + 1) (closureApply cl (VVar l)))
   VType k    -> Type k
   VCon c vs  -> Con c (map (quote l) vs)
+  VFix f cl  ->
+    -- A VFix should only appear unapplied in neutral position (rare).
+    -- Quote it as a Lam that unrolls once: \x -> body[f:=self, x:=Var 0].
+    -- We introduce two fresh levels: l for self, l+1 for x.
+    let self = VFix f cl
+        xVar = VVar (l + 1)
+        Closure env b = cl
+        body = eval (xVar : self : env) b
+    in Lam f (Lam "x" (quote (l + 2) body))
   VMatch scrut motive branches ->
     Match (quote l scrut) (quote l motive)
       [ let body = foldl appVal (eval env b) [VVar (l + i) | i <- [0..ar-1]]
@@ -88,6 +113,14 @@ convCheck l v1 v2 = case (v1, v2) of
     convCheck l a1 a2 &&
     let v = VVar l
     in convCheck (l + 1) (closureApply cl1 v) (closureApply cl2 v)
+  (VFix _ cl1, VFix _ cl2) ->
+    -- Equal if bodies agree under fresh self (l) and arg (l+1).
+    let self1 = VFix "_" cl1; self2 = VFix "_" cl2
+        x = VVar (l + 1)
+        Closure env1 b1 = cl1; Closure env2 b2 = cl2
+        v1 = eval (x : self1 : env1) b1
+        v2 = eval (x : self2 : env2) b2
+    in convCheck (l + 2) v1 v2
   (VCon c1 vs1, VCon c2 vs2) ->
     c1 == c2 && length vs1 == length vs2 && and (zipWith (convCheck l) vs1 vs2)
   (VMatch s1 m1 bs1, VMatch s2 m2 bs2) ->

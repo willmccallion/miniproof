@@ -35,6 +35,10 @@ prettyTerm = go []
         let n' = freshen ns n
         in "let " <> n' <> " : " <> go ns ty <> " = " <> go ns e
            <> " in " <> go (n' : ns) body
+      Fix f x _aTy _rTy body ->
+        let f' = freshen ns f
+            x' = freshen (f':ns) x
+        in "fix (" <> f' <> ") (" <> x' <> ") = " <> go (x' : f' : ns) body
       Con c []   -> c
       Con c args -> c <> " " <> T.intercalate " " (map (goAtom ns) args)
       Match t motive branches ->
@@ -83,6 +87,8 @@ prettyRaw = \case
   RLet n ty e b -> "let " <> n <> " : " <> prettyRaw ty <> " = " <> prettyRaw e
                    <> " in " <> prettyRaw b
   RAnn e ty    -> "(" <> prettyRaw e <> " : " <> prettyRaw ty <> ")"
+  RFix f fTy x argTy body ->
+    "fix (" <> f <> " : " <> prettyRaw fTy <> ") (" <> x <> " : " <> prettyRaw argTy <> ") = " <> prettyRaw body
   RCon c []    -> c
   RCon c args  -> c <> " " <> T.intercalate " " (map prettyRawAtom args)
   RMatch t m bs -> "match " <> prettyRaw t <> " return " <> prettyRaw m

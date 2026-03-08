@@ -44,4 +44,22 @@ tests = testGroup "Eval"
   , testCase "Type quoting" $ do
       let v = VType 3
       quote 0 v @?= Type 3
+
+  , testCase "fix: double reduces correctly" $ do
+      -- double = fix f n = match n with { zero -> zero | succ k -> succ (succ (f k)) }
+      let doubleTerm =
+            Fix "f" "n"
+              (Con "Nat" []) (Con "Nat" [])  -- placeholders, not used in eval
+              -- body env: Var 0 = n (arg), Var 1 = f (self)
+              (Match (Var 0) (Lam "_" (Con "Nat" []))
+                [ ("zero", 0, Con "zero" [])
+                  -- succ branch has arity 1: body is a Lam for k
+                  -- inside Lam: Var 0 = k, Var 1 = n, Var 2 = f (self)
+                , ("succ", 1, Lam "k" (Con "succ" [Con "succ" [App (Var 2) (Var 0)]]))
+                ])
+          vZero   = VCon "zero" []
+          vSucc v = VCon "succ" [v]
+          doubleVal = eval [] doubleTerm
+          result    = appVal doubleVal (vSucc (vSucc vZero))   -- double 2
+      quote 0 result @?= Con "succ" [Con "succ" [Con "succ" [Con "succ" [Con "zero" []]]]]
   ]

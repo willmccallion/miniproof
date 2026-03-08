@@ -1,0 +1,30 @@
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Addition by recursion on the first argument
+add : Nat -> Nat -> Nat
+    = \(m : Nat) ->
+        fix (f : Nat -> Nat) (n : Nat) =
+          match n return (\(_ : Nat) -> Nat) with
+          { zero   -> m
+          | succ k -> succ (f k)
+          }
+
+-- Multiplication
+mul : Nat -> Nat -> Nat
+    = \(m : Nat) ->
+        fix (f : Nat -> Nat) (n : Nat) =
+          match n return (\(_ : Nat) -> Nat) with
+          { zero   -> zero
+          | succ k -> add m (f k)
+          }
+
+-- Double
+double : Nat -> Nat
+       = fix (f : Nat -> Nat) (n : Nat) =
+           match n return (\(_ : Nat) -> Nat) with
+           { zero   -> zero
+           | succ k -> succ (succ (f k))
+           }
