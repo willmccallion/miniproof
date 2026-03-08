@@ -3,6 +3,7 @@ module Prover.Parser
   ( parseFile
   , parseRaw
   , parseDef
+  , parseItem
   ) where
 
 import Data.Text (Text)
@@ -32,8 +33,11 @@ symbol = L.symbol sc
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+braces :: Parser a -> Parser a
+braces = between (symbol "{") (symbol "}")
+
 reserved :: [Text]
-reserved = ["let", "in", "Type", "forall"]
+reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with"]
 
 ident :: Parser Text
 ident = lexeme $ try $ do
@@ -46,10 +50,10 @@ ident = lexeme $ try $ do
 -- Raw term parser
 -- ---------------------------------------------------------------------------
 
--- Precedence: let/lam/pi bind loosest, application is left-assoc, atoms are tightest.
+-- Precedence: let/lam/pi/match bind loosest, application is left-assoc, atoms are tightest.
 
 rawTerm :: Parser Raw
-rawTerm = choice [pLam, pLet, pPi, pFunOrApp]
+rawTerm = choice [pLam, pLet, pPi, pMatch, pFunOrApp]
 
 pAtom :: Parser Raw
 pAtom = choice
@@ -123,29 +127,76 @@ pLet = do
   body <- rawTerm
   pure (RLet n ty e body)
 
+-- | Match expression:
+--   match t return P with { C1 x1 .. -> e1 | C2 x1 .. -> e2 }
+pMatch :: Parser Raw
+pMatch = do
+  _ <- symbol "match"
+  t <- rawTerm
+  _ <- symbol "return"
+  motive <- rawTerm
+  _ <- symbol "with"
+  branches <- braces (pBranch `sepBy` symbol "|")
+  pure (RMatch t motive branches)
+
+-- | A single branch: ConName x1 x2 .. -> body
+pBranch :: Parser (Name, [Name], Raw)
+pBranch = do
+  c <- ident
+  xs <- many ident
+  _ <- symbol "->"
+  body <- rawTerm
+  pure (c, xs, body)
+
 -- ---------------------------------------------------------------------------
--- Top-level definition parser
+-- Top-level item parser
 -- ---------------------------------------------------------------------------
 
--- | Parse "name : type = body"
-pDef :: Parser (Text, Raw, Raw)
+-- | Parse "name : type = body" (a definition)
+pDef :: Parser RItem
 pDef = do
   n <- ident
   _ <- symbol ":"
   ty <- rawTerm
   _ <- symbol "="
   body <- rawTerm
-  pure (n, ty, body)
+  pure (RDef n ty body)
 
--- | Parse a file of definitions.
-pFile :: Parser [(Text, Raw, Raw)]
-pFile = sc *> many pDef <* eof
+-- | Parse a data declaration:
+--   data Name : Kind where { Con1 : T1 | Con2 : T2 | .. }
+pData :: Parser RItem
+pData = do
+  _ <- symbol "data"
+  n <- ident
+  _ <- symbol ":"
+  kind <- rawTerm
+  _ <- symbol "where"
+  cons <- braces (pConDecl `sepBy` symbol "|")
+  pure (RData n kind cons)
+
+-- | Parse a constructor declaration: "ConName : FieldType1 -> .. -> ReturnType"
+-- We parse a full type and flatten it into a list of field types + return type.
+pConDecl :: Parser RConDecl
+pConDecl = do
+  c <- ident
+  _ <- symbol ":"
+  ty <- rawTerm
+  pure (RConDecl c (flattenArrow ty))
+
+-- | Flatten "A -> B -> C" into [A, B, C].
+flattenArrow :: Raw -> [Raw]
+flattenArrow (RPi "_" a b) = a : flattenArrow b
+flattenArrow t             = [t]
+
+-- | Parse a file of items (definitions or data declarations).
+pFile :: Parser [RItem]
+pFile = sc *> many (pData <|> pDef) <* eof
 
 -- ---------------------------------------------------------------------------
 -- Public API
 -- ---------------------------------------------------------------------------
 
-parseFile :: Text -> Either String [(Text, Raw, Raw)]
+parseFile :: Text -> Either String [RItem]
 parseFile input = case parse pFile "<input>" input of
   Left err -> Left (errorBundlePretty err)
   Right ds -> Right ds
@@ -155,7 +206,12 @@ parseRaw input = case parse (sc *> rawTerm <* eof) "<input>" input of
   Left err -> Left (errorBundlePretty err)
   Right t  -> Right t
 
-parseDef :: Text -> Either String (Text, Raw, Raw)
+parseDef :: Text -> Either String RItem
 parseDef input = case parse (sc *> pDef <* eof) "<input>" input of
+  Left err -> Left (errorBundlePretty err)
+  Right d  -> Right d
+
+parseItem :: Text -> Either String RItem
+parseItem input = case parse (sc *> (pData <|> pDef) <* eof) "<input>" input of
   Left err -> Left (errorBundlePretty err)
   Right d  -> Right d

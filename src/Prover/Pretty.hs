@@ -35,12 +35,30 @@ prettyTerm = go []
         let n' = freshen ns n
         in "let " <> n' <> " : " <> go ns ty <> " = " <> go ns e
            <> " in " <> go (n' : ns) body
+      Con c []   -> c
+      Con c args -> c <> " " <> T.intercalate " " (map (goAtom ns) args)
+      Match t motive branches ->
+        "match " <> go ns t <> " return " <> go ns motive <> " with { "
+        <> T.intercalate " | " (map (goBranch ns) branches)
+        <> " }"
+
+    goBranch ns (c, ar, body) =
+      let (ns', xs) = freshNames ns ar
+      in c <> (if null xs then "" else " " <> T.unwords xs)
+         <> " -> " <> go ns' body
+
+    freshNames ns 0 = (ns, [])
+    freshNames ns n =
+      let x  = freshen ns "x"
+          (ns', xs) = freshNames (x : ns) (n - 1)
+      in (ns', x : xs)
 
     goApp ns (App f a) = goApp ns f <> " " <> goAtom ns a
     goApp ns t         = goAtom ns t
 
     goAtom ns t@(Var _)    = go ns t
     goAtom ns t@(Type _)   = go ns t
+    goAtom ns t@(Con _ []) = go ns t
     goAtom ns t            = "(" <> go ns t <> ")"
 
     freshen :: [Name] -> Name -> Name
@@ -65,12 +83,22 @@ prettyRaw = \case
   RLet n ty e b -> "let " <> n <> " : " <> prettyRaw ty <> " = " <> prettyRaw e
                    <> " in " <> prettyRaw b
   RAnn e ty    -> "(" <> prettyRaw e <> " : " <> prettyRaw ty <> ")"
+  RCon c []    -> c
+  RCon c args  -> c <> " " <> T.intercalate " " (map prettyRawAtom args)
+  RMatch t m bs -> "match " <> prettyRaw t <> " return " <> prettyRaw m
+                   <> " with { "
+                   <> T.intercalate " | "
+                        [ c <> (if null xs then "" else " " <> T.unwords xs)
+                          <> " -> " <> prettyRaw b
+                        | (c, xs, b) <- bs ]
+                   <> " }"
 
 prettyRawApp :: Raw -> Text
 prettyRawApp (RApp f a) = prettyRawApp f <> " " <> prettyRawAtom a
 prettyRawApp t          = prettyRawAtom t
 
 prettyRawAtom :: Raw -> Text
-prettyRawAtom t@(RVar _)  = prettyRaw t
-prettyRawAtom t@(RType _) = prettyRaw t
-prettyRawAtom t            = "(" <> prettyRaw t <> ")"
+prettyRawAtom t@(RVar _)     = prettyRaw t
+prettyRawAtom t@(RType _)    = prettyRaw t
+prettyRawAtom t@(RCon _ [])  = prettyRaw t
+prettyRawAtom t               = "(" <> prettyRaw t <> ")"

@@ -42,7 +42,7 @@ tests = testGroup "Parser"
       t @?= RLet "x" (RVar "A") (RVar "e") (RVar "x")
 
   , testCase "definition" $ do
-      let Right (n, ty, body) = parseDef "id : forall (A : Type) -> A -> A = \\(A : Type) -> \\(a : A) -> a"
+      let Right (RDef n ty body) = parseDef "id : forall (A : Type) -> A -> A = \\(A : Type) -> \\(a : A) -> a"
       n @?= "id"
       ty @?= RPi "A" (RType 0) (RPi "_" (RVar "A") (RVar "A"))
       body @?= RLam "A" (RType 0) (RLam "a" (RVar "A") (RVar "a"))

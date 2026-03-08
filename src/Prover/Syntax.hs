@@ -23,6 +23,19 @@ data Raw
   | RType Int                   -- Type n
   | RLet Name Raw Raw Raw       -- let x : A = e in body
   | RAnn Raw Raw                -- (e : A)
+  | RCon Name [Raw]             -- constructor application: C e1 .. en
+  | RMatch Raw Raw [(Name, [Name], Raw)]
+    -- match t return P with { C x1..xn -> e | ... }
+  deriving (Show, Eq)
+
+-- | A raw constructor declaration: name followed by field types.
+data RConDecl = RConDecl Name [Raw]
+  deriving (Show, Eq)
+
+-- | A raw top-level item: either a term definition or a data declaration.
+data RItem
+  = RDef Name Raw Raw                    -- name : type = body
+  | RData Name Raw [RConDecl]            -- data name : kind where { C1 .. | C2 .. }
   deriving (Show, Eq)
 
 -- ---------------------------------------------------------------------------
@@ -36,6 +49,10 @@ data Term
   | Pi Name Term Term            -- (x : A) -> B
   | Type Int
   | Let Name Term Term Term      -- let x : A = e in body
+  | Con Name [Term]             -- constructor: C t1 .. tn
+  | Match Term Term [(Name, Int, Term)]
+    -- match scrutinee return motive with branches
+    -- each branch: (constructor name, arity, body with arity binders)
   deriving (Show, Eq)
 
 -- ---------------------------------------------------------------------------
@@ -48,6 +65,9 @@ data Val
   | VLam Name Closure
   | VPi Name Val Closure
   | VType Int
+  | VCon Name [Val]             -- constructor value
+  | VMatch Val Val [(Name, Int, Closure)]
+    -- stuck match (scrutinee is neutral)
 
 data Closure = Closure Env Term
 

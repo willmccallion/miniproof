@@ -4,6 +4,7 @@ module Prover.Eval
   , appVal
   , closureApply
   , convCheck
+  , matchVal
   ) where
 
 import Prover.Syntax
@@ -20,6 +21,12 @@ eval env = \case
   Pi n a b   -> VPi n (eval env a) (Closure env b)
   Type k     -> VType k
   Let _ _ e body -> eval (eval env e : env) body
+  Con c args -> VCon c (map (eval env) args)
+  Match t motive branches ->
+    -- Branch body is a Term with `arity` leading Lam binders.
+    -- Evaluate it in the current env to get a VLam chain, then apply con args.
+    matchVal (eval env t) (eval env motive)
+      [(c, ar, env, b) | (c, ar, b) <- branches]
 
 appVal :: Val -> Val -> Val
 appVal (VLam _ cl) arg = closureApply cl arg
@@ -27,6 +34,20 @@ appVal f           arg = VApp f arg
 
 closureApply :: Closure -> Val -> Val
 closureApply (Closure env body) val = eval (val : env) body
+
+-- | Reduce a match expression.
+-- Branch bodies are pre-evaluated to VLam chains; constructor args are applied.
+matchVal :: Val -> Val -> [(Name, Int, Env, Term)] -> Val
+matchVal (VCon c args) _motive branches =
+  case [(ar, env, body) | (n, ar, env, body) <- branches, n == c] of
+    [(ar, env, body)]
+      | length args == ar ->
+          -- eval branch body (has `ar` leading Lams), then apply each arg
+          foldl appVal (eval env body) args
+      | otherwise -> error "matchVal: constructor arity mismatch (bug in elaborator)"
+    _ -> error $ "matchVal: missing/duplicate branch for " <> show c
+matchVal scrut motive branches =
+  VMatch scrut motive [(c, ar, Closure env b) | (c, ar, env, b) <- branches]
 
 -- ---------------------------------------------------------------------------
 -- Quoting (values -> normal-form syntax)
@@ -39,6 +60,13 @@ quote l = \case
   VLam n cl  -> Lam n (quote (l + 1) (closureApply cl (VVar l)))
   VPi n a cl -> Pi n (quote l a) (quote (l + 1) (closureApply cl (VVar l)))
   VType k    -> Type k
+  VCon c vs  -> Con c (map (quote l) vs)
+  VMatch scrut motive branches ->
+    Match (quote l scrut) (quote l motive)
+      [ let body = foldl appVal (eval env b) [VVar (l + i) | i <- [0..ar-1]]
+        in (c, ar, quote (l + ar) body)
+      | (c, ar, Closure env b) <- branches
+      ]
 
 -- ---------------------------------------------------------------------------
 -- Conversion checking (are two values definitionally equal?)
@@ -60,4 +88,16 @@ convCheck l v1 v2 = case (v1, v2) of
     convCheck l a1 a2 &&
     let v = VVar l
     in convCheck (l + 1) (closureApply cl1 v) (closureApply cl2 v)
+  (VCon c1 vs1, VCon c2 vs2) ->
+    c1 == c2 && length vs1 == length vs2 && and (zipWith (convCheck l) vs1 vs2)
+  (VMatch s1 m1 bs1, VMatch s2 m2 bs2) ->
+    convCheck l s1 s2 && convCheck l m1 m2 &&
+    length bs1 == length bs2 &&
+    and [ c1 == c2 && ar1 == ar2 &&
+          let vs = [VVar (l + i) | i <- [0..ar1-1]]
+              v1' = foldl appVal (eval env1 b1) vs
+              v2' = foldl appVal (eval env2 b2) vs
+          in convCheck (l + ar1) v1' v2'
+        | ((c1, ar1, Closure env1 b1), (c2, ar2, Closure env2 b2)) <- zip bs1 bs2
+        ]
   _ -> False
