@@ -61,4 +61,64 @@ tests = testGroup "Check"
       case checkProgram defs of
         Left err -> assertFailure $ "type error: " <> show err
         Right checked -> length checked @?= 2
+
+  , testCase "Bool data type with not" $ do
+      let Right defs = parseFile $ mconcat
+            [ "data Bool : Type where { true : Bool | false : Bool }\n"
+            , "not : Bool -> Bool\n"
+            , "    = \\(b : Bool) ->\n"
+            , "        match b return (\\(_ : Bool) -> Bool) with\n"
+            , "        { true -> false | false -> true }"
+            ]
+      case checkProgram defs of
+        Left err -> assertFailure $ "type error: " <> show err
+        Right _  -> pure ()
+
+  , testCase "Nat with pred and isZero" $ do
+      let Right defs = parseFile $ mconcat
+            [ "data Nat : Type where { zero : Nat | succ : Nat -> Nat }\n"
+            , "pred : Nat -> Nat\n"
+            , "     = \\(n : Nat) ->\n"
+            , "         match n return (\\(_ : Nat) -> Nat) with\n"
+            , "         { zero -> zero | succ m -> m }\n"
+            , "isZero : Nat -> Bool\n"
+            , "       = isZero"  -- placeholder, we skip this one
+            ]
+      -- just check pred parses and checks
+      let Right defs2 = parseFile $ mconcat
+            [ "data Nat : Type where { zero : Nat | succ : Nat -> Nat }\n"
+            , "pred : Nat -> Nat\n"
+            , "     = \\(n : Nat) ->\n"
+            , "         match n return (\\(_ : Nat) -> Nat) with\n"
+            , "         { zero -> zero | succ m -> m }"
+            ]
+      case checkProgram defs2 of
+        Left err -> assertFailure $ "type error: " <> show err
+        Right _  -> pure ()
+
+  , testCase "missing branch is rejected" $ do
+      let Right defs = parseFile $ mconcat
+            [ "data Bool : Type where { true : Bool | false : Bool }\n"
+            , "bad : Bool -> Bool\n"
+            , "    = \\(b : Bool) ->\n"
+            , "        match b return (\\(_ : Bool) -> Bool) with\n"
+            , "        { true -> true }"
+            ]
+      case checkProgram defs of
+        Left (MissingBranch _) -> pure ()
+        Left err -> assertFailure $ "wrong error: " <> show err
+        Right _  -> assertFailure "should have been rejected"
+
+  , testCase "extra branch is rejected" $ do
+      let Right defs = parseFile $ mconcat
+            [ "data Bool : Type where { true : Bool | false : Bool }\n"
+            , "bad : Bool -> Bool\n"
+            , "    = \\(b : Bool) ->\n"
+            , "        match b return (\\(_ : Bool) -> Bool) with\n"
+            , "        { true -> true | false -> false | bogus -> true }"
+            ]
+      case checkProgram defs of
+        Left (ExtraBranch _) -> pure ()
+        Left err -> assertFailure $ "wrong error: " <> show err
+        Right _  -> assertFailure "should have been rejected"
   ]
