@@ -1,6 +1,7 @@
 module Prover.Syntax where
 
 import Data.Text (Text)
+import Text.Megaparsec.Pos (SourcePos)
 
 -- | De Bruijn index for bound variables.
 type Ix = Int
@@ -33,6 +34,8 @@ data Raw
   | RId Raw Raw Raw             -- Id A a b
   | RRefl Raw Raw               -- refl A a
   | RJ Raw Raw Raw Raw Raw Raw  -- J A a P pr b p
+  -- Source location annotation (for error messages)
+  | RAt SourcePos Raw
   deriving (Show, Eq)
 
 -- | A raw constructor declaration: name followed by field types.

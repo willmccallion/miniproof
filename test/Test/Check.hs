@@ -8,6 +8,12 @@ import Prover.Syntax
 import Prover.Check
 import Prover.Parser
 
+-- Peel InDefinition and At wrappers to get the root error.
+rootError :: TypeError -> TypeError
+rootError (InDefinition _ e) = rootError e
+rootError (At _ e)           = rootError e
+rootError e                  = e
+
 tests :: TestTree
 tests = testGroup "Check"
   [ testCase "identity: (A : Type) -> A -> A" $ do
@@ -49,8 +55,9 @@ tests = testGroup "Check"
       let Right defs = parseFile
             "bad : Type = x"
       case checkProgram defs of
-        Left (UnboundVar _) -> pure ()
-        Left err -> assertFailure $ "wrong error: " <> show err
+        Left err -> case rootError err of
+          UnboundVar _ -> pure ()
+          e -> assertFailure $ "wrong error: " <> show e
         Right _  -> assertFailure "should have been rejected"
 
   , testCase "multiple definitions with dependency" $ do
@@ -105,8 +112,9 @@ tests = testGroup "Check"
             , "        { true -> true }"
             ]
       case checkProgram defs of
-        Left (MissingBranch _) -> pure ()
-        Left err -> assertFailure $ "wrong error: " <> show err
+        Left err -> case rootError err of
+          MissingBranch _ -> pure ()
+          e -> assertFailure $ "wrong error: " <> show e
         Right _  -> assertFailure "should have been rejected"
 
   , testCase "extra branch is rejected" $ do
@@ -118,7 +126,8 @@ tests = testGroup "Check"
             , "        { true -> true | false -> false | bogus -> true }"
             ]
       case checkProgram defs of
-        Left (ExtraBranch _) -> pure ()
-        Left err -> assertFailure $ "wrong error: " <> show err
+        Left err -> case rootError err of
+          ExtraBranch _ -> pure ()
+          e -> assertFailure $ "wrong error: " <> show e
         Right _  -> assertFailure "should have been rejected"
   ]

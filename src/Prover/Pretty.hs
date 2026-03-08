@@ -108,6 +108,7 @@ prettyRaw = \case
   RRefl a x    -> "refl " <> prettyRawAtom a <> " " <> prettyRawAtom x
   RJ a x p pr b prf ->
     "J " <> T.unwords (map prettyRawAtom [a, x, p, pr, b, prf])
+  RAt _ r      -> prettyRaw r
 
 prettyRawApp :: Raw -> Text
 prettyRawApp (RApp f a) = prettyRawApp f <> " " <> prettyRawAtom a

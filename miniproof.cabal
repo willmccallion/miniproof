@@ -39,6 +39,7 @@ executable miniproof
         base            ^>=4.20.2.0,
         miniproof,
         text            >=2.1,
+        megaparsec      >=9.6,
         optparse-applicative >=0.18
     default-language: GHC2024
 

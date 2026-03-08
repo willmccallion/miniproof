@@ -1,8 +1,11 @@
 module Main (main) where
 
+import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Options.Applicative
 import System.Exit (exitFailure)
+import Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 
 import Prover.Check
 import Prover.Parser
@@ -42,28 +45,46 @@ checkFile path = do
         putStrLn $ path <> ": OK (" <> show (length checked) <> " definitions)"
 
 printError :: TypeError -> IO ()
-printError = \case
+printError = go Nothing
+  where
+  go mpos = \case
+    InDefinition n err -> do
+      putStrLn $ "  in definition: " <> T.unpack n
+      go mpos err
+    At pos err -> go (Just pos) err
+    err -> do
+      case mpos of
+        Just pos -> putStrLn $ "  at " <> sourcePosPretty pos
+        Nothing  -> pure ()
+      printLeaf err
+
+printLeaf :: TypeError -> IO ()
+printLeaf = \case
   UnboundVar n ->
-    putStrLn $ "  unbound variable: " <> show n
+    putStrLn $ "  unbound variable: " <> T.unpack n
   TypeMismatch expected got ->
-    putStrLn $ "  expected: " <> show (prettyTerm expected)
-            <> "\n  got:      " <> show (prettyTerm got)
+    putStrLn $ "  expected: " <> T.unpack (prettyTerm expected)
+            <> "\n  got:      " <> T.unpack (prettyTerm got)
   ExpectedPi got ->
-    putStrLn $ "  expected function type, got: " <> show (prettyTerm got)
+    putStrLn $ "  expected function type, got: " <> T.unpack (prettyTerm got)
   ExpectedType got ->
-    putStrLn $ "  expected Type, got: " <> show (prettyTerm got)
+    putStrLn $ "  expected Type, got: " <> T.unpack (prettyTerm got)
   CannotInfer raw ->
-    putStrLn $ "  cannot infer type for: " <> show (prettyRaw raw)
+    putStrLn $ "  cannot infer type for: " <> T.unpack (prettyRaw raw)
   UnknownConstructor n ->
-    putStrLn $ "  unknown constructor: " <> show n
+    putStrLn $ "  unknown constructor: " <> T.unpack n
   UnknownDataType n ->
-    putStrLn $ "  unknown data type: " <> show n
+    putStrLn $ "  unknown data type: " <> T.unpack n
   WrongNumberOfArgs c expected got ->
-    putStrLn $ "  wrong number of args for " <> show c
+    putStrLn $ "  wrong number of args for " <> T.unpack c
             <> ": expected " <> show expected <> ", got " <> show got
   MissingBranch c ->
-    putStrLn $ "  missing branch for constructor: " <> show c
+    putStrLn $ "  missing branch for constructor: " <> T.unpack c
   ExtraBranch c ->
-    putStrLn $ "  extra branch for unknown constructor: " <> show c
+    putStrLn $ "  extra branch for unknown constructor: " <> T.unpack c
   DuplicateBranch c ->
-    putStrLn $ "  duplicate branch for constructor: " <> show c
+    putStrLn $ "  duplicate branch for constructor: " <> T.unpack c
+  InDefinition n err ->
+    putStrLn $ "  in definition: " <> T.unpack n
+  At _ err ->
+    printLeaf err

@@ -10,7 +10,6 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
 import Text.Megaparsec
-
 import Prover.Syntax
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
@@ -200,14 +199,21 @@ pBranch = do
 -- Top-level item parser
 -- ---------------------------------------------------------------------------
 
+-- | Wrap a parser result with its starting source position.
+withPos :: Parser Raw -> Parser Raw
+withPos p = do
+  pos <- getSourcePos
+  r <- p
+  pure (RAt pos r)
+
 -- | Parse "name : type = body" (a definition)
 pDef :: Parser RItem
 pDef = do
   n <- ident
   _ <- symbol ":"
-  ty <- rawTerm
+  ty <- withPos rawTerm
   _ <- symbol "="
-  body <- rawTerm
+  body <- withPos rawTerm
   pure (RDef n ty body)
 
 -- | Parse a data declaration:

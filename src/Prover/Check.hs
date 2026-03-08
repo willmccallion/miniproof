@@ -9,6 +9,7 @@ module Prover.Check
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.List (find)
+import Text.Megaparsec.Pos (SourcePos)
 
 import Prover.Syntax
 import Prover.Eval
@@ -30,6 +31,8 @@ data TypeError
   | MissingBranch Name            -- constructor not covered
   | ExtraBranch Name              -- branch not a constructor of the type
   | DuplicateBranch Name
+  | InDefinition Name TypeError   -- error located in a named definition
+  | At SourcePos TypeError        -- error with source location
   deriving (Show, Eq)
 
 -- ---------------------------------------------------------------------------
@@ -39,6 +42,10 @@ data TypeError
 -- | Check that a raw term has the given type.
 check :: Ctx -> Raw -> Val -> Either TypeError Term
 check ctx raw expected = case (raw, expected) of
+  -- Source location: annotate errors with position
+  (RAt pos r, _) ->
+    either (Left . At pos) Right (check ctx r expected)
+
   -- Lambda introduction: check body under extended context
   (RLam n _aTy body, VPi _ aTyVal bCl) -> do
     let ctx' = ctxBind ctx n aTyVal
@@ -66,6 +73,8 @@ check ctx raw expected = case (raw, expected) of
 -- | Infer the type of a raw term.
 infer :: Ctx -> Raw -> Either TypeError (Term, Val)
 infer ctx = \case
+  RAt pos r -> either (Left . At pos) Right (infer ctx r)
+
   RVar n -> case ctxLookup ctx n of
     Just (ix, ty) -> pure (Var ix, ty)
     Nothing       -> Left (UnboundVar n)
@@ -395,9 +404,10 @@ checkProgram = go emptyCtx
     go _ [] = pure []
     go ctx (item:rest) = case item of
       RDef n rawTy rawBody -> do
-        ty' <- checkType ctx rawTy
+        let locate = either (Left . InDefinition n) Right
+        ty' <- locate $ checkType ctx rawTy
         let tyVal = eval (ctxEnv ctx) ty'
-        body' <- check ctx rawBody tyVal
+        body' <- locate $ check ctx rawBody tyVal
         let bodyVal = eval (ctxEnv ctx) body'
         let ctx' = ctxDefine ctx n tyVal bodyVal
         rest' <- go ctx' rest
