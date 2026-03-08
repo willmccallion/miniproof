@@ -54,3 +54,16 @@ printError = \case
     putStrLn $ "  expected Type, got: " <> show (prettyTerm got)
   CannotInfer raw ->
     putStrLn $ "  cannot infer type for: " <> show (prettyRaw raw)
+  UnknownConstructor n ->
+    putStrLn $ "  unknown constructor: " <> show n
+  UnknownDataType n ->
+    putStrLn $ "  unknown data type: " <> show n
+  WrongNumberOfArgs c expected got ->
+    putStrLn $ "  wrong number of args for " <> show c
+            <> ": expected " <> show expected <> ", got " <> show got
+  MissingBranch c ->
+    putStrLn $ "  missing branch for constructor: " <> show c
+  ExtraBranch c ->
+    putStrLn $ "  extra branch for unknown constructor: " <> show c
+  DuplicateBranch c ->
+    putStrLn $ "  duplicate branch for constructor: " <> show c

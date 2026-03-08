@@ -366,16 +366,16 @@ elaborateCon ctx (RConDecl c fieldTypes) = do
   pure $ ConDecl c ar conTyVal
   where
     -- Build Pi (x1 : A1) -> Pi (x2 : A2) -> ... -> DataType
-    -- We don't give names to fields in the raw syntax (they're just types),
-    -- so we use "_" for all binders.
-    buildConType :: Ctx -> [Raw] -> Either TypeError (Term, Int)
+    -- Uses binder names from the parsed constructor type so dependent fields
+    -- (e.g. Vec n) can reference earlier binders (e.g. n : Nat).
+    buildConType :: Ctx -> [(Name, Raw)] -> Either TypeError (Term, Int)
     buildConType _ctx [] = Left (UnknownDataType "<missing return type>")
-    buildConType ctx' [retTy] = do
+    buildConType ctx' [(_n, retTy)] = do
       retTy' <- checkType ctx' retTy
       pure (retTy', 0)
-    buildConType ctx' (fieldTy : rest) = do
+    buildConType ctx' ((n, fieldTy) : rest) = do
       fieldTy' <- checkType ctx' fieldTy
       let fieldTyVal = eval (ctxEnv ctx') fieldTy'
-      let ctx'' = ctxBind ctx' "_" fieldTyVal
+      let ctx'' = ctxBind ctx' n fieldTyVal
       (restTy, ar) <- buildConType ctx'' rest
-      pure (Pi "_" fieldTy' restTy, ar + 1)
+      pure (Pi n fieldTy' restTy, ar + 1)

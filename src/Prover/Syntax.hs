@@ -32,7 +32,7 @@ data Raw
   deriving (Show, Eq)
 
 -- | A raw constructor declaration: name followed by field types.
-data RConDecl = RConDecl Name [Raw]
+data RConDecl = RConDecl Name [(Name, Raw)]
   deriving (Show, Eq)
 
 -- | A raw top-level item: either a term definition or a data declaration.

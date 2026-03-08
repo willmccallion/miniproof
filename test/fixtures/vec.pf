@@ -1,0 +1,24 @@
+data Bool : Type where
+  { true  : Bool
+  | false : Bool
+  }
+
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Length-indexed vectors
+data Vec : Nat -> Type where
+  { nil  : Vec zero
+  | cons : forall (n : Nat) -> forall (A : Type) -> A -> Vec n -> Vec (succ n)
+  }
+
+-- Check if a Vec is empty (returns true for nil, false for cons)
+isEmpty : forall (n : Nat) -> forall (A : Type) -> Vec n -> Bool
+        = \(n : Nat) -> \(A : Type) -> \(v : Vec n) ->
+            match v return (\(_ : Vec n) -> Bool) with
+            { nil              -> true
+            | cons k B a tl   -> false
+            }
+

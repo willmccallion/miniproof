@@ -200,12 +200,13 @@ pConDecl = do
   c <- ident
   _ <- symbol ":"
   ty <- rawTerm
-  pure (RConDecl c (flattenArrow ty))
+  pure (RConDecl c (flattenFields ty))
 
--- | Flatten "A -> B -> C" into [A, B, C].
-flattenArrow :: Raw -> [Raw]
-flattenArrow (RPi "_" a b) = a : flattenArrow b
-flattenArrow t             = [t]
+-- | Flatten "A -> B -> C" or "forall (n : A) -> B -> C" into [(name, type)] pairs.
+-- The last element is the return type with a dummy name.
+flattenFields :: Raw -> [(Name, Raw)]
+flattenFields (RPi n a b) = (n, a) : flattenFields b
+flattenFields t           = [("_", t)]
 
 -- | Parse a file of items (definitions or data declarations).
 pFile :: Parser [RItem]
