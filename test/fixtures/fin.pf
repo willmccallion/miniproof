@@ -1,0 +1,52 @@
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Length-indexed vectors (element type stored in cons)
+data Vec : Nat -> Type where
+  { nil  : Vec zero
+  | cons : forall (n : Nat) -> forall (A : Type) -> A -> Vec n -> Vec (succ n)
+  }
+
+-- Finite sets: Fin n has exactly n elements (indices 0 .. n-1)
+data Fin : Nat -> Type where
+  { fzero : forall (n : Nat) -> Fin (succ n)
+  | fsucc : forall (n : Nat) -> Fin n -> Fin (succ n)
+  }
+
+-- Fin zero is empty: no branches needed (all constructors are impossible by index).
+finZeroAbsurd : forall (A : Type) -> Fin zero -> A
+              = \(A : Type) -> \(i : Fin zero) ->
+                  match i return (\(_ : Fin zero) -> A) with
+                  {  }
+
+-- Vec zero is just nil: cons branch is impossible by index refinement.
+vecNilOnly : Vec zero
+           = let v : Vec zero = nil in
+               match v return (\(_ : Vec zero) -> Vec zero) with
+               { nil -> nil
+               }
+
+-- vecLength: count the elements of a Vec.
+vecLength : forall (n : Nat) -> Vec n -> Nat
+          = fix (f : forall (n : Nat) -> Vec n -> Nat) (n : Nat) =
+              \(v : Vec n) ->
+                match v return (\(_ : Vec n) -> Nat) with
+                { nil           -> zero
+                | cons k A x tl -> succ (f k tl)
+                }
+
+-- finToNat: embed a finite index into Nat.
+finToNat : forall (n : Nat) -> Fin n -> Nat
+         = fix (f : forall (n : Nat) -> Fin n -> Nat) (n : Nat) =
+             \(i : Fin n) ->
+               match i return (\(_ : Fin n) -> Nat) with
+               { fzero k  -> zero
+               | fsucc k j -> succ (f k j)
+               }
+
+-- finToNat is bounded: finToNat i < n (stated as a type, proved separately).
+-- Here we just verify finToNat zero = zero (via reduction) by providing the proof.
+finToNatFzero : forall (n : Nat) -> Id Nat (finToNat (succ n) (fzero n)) zero
+              = \(n : Nat) -> refl Nat zero

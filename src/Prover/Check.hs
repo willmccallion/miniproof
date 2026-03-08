@@ -268,6 +268,8 @@ resolveDataDecl ctx ty =
 
 -- | Check all branches of a match against a data declaration.
 --   Returns elaborated branches: [(conName, arity, body)].
+--   Constructors whose return-type indices are structurally incompatible with
+--   the scrutinee type indices are treated as impossible and do not need branches.
 checkBranches
   :: Ctx
   -> DataDecl
@@ -275,23 +277,66 @@ checkBranches
   -> Term                   -- elaborated motive
   -> Val                    -- scrutinee type
   -> Either TypeError [(Name, Int, Term)]
-checkBranches ctx dataDecl rawBranches motiveTerm _scrutTy = do
+checkBranches ctx dataDecl rawBranches motiveTerm scrutTy = do
   -- Check for duplicates
   let branchNames = [c | (c,_,_) <- rawBranches]
   case findDup branchNames of
     Just c  -> Left (DuplicateBranch c)
     Nothing -> pure ()
-  -- Check for extras
+  -- Partition constructors into possible and impossible given the scrutinee type.
+  let scrutIdxs = typeIndices scrutTy
+      possibleCons = filter (conIsPossible ctx scrutIdxs) (dataCons dataDecl)
+      possibleNames = map conName possibleCons
+  -- Check for extras (branch for a constructor not in this data type)
   let conNames = map conName (dataCons dataDecl)
   case filter (`notElem` conNames) branchNames of
     (c:_) -> Left (ExtraBranch c)
     []    -> pure ()
-  -- Check for missing
-  case filter (`notElem` branchNames) conNames of
+  -- Check for missing (required constructor has no branch)
+  case filter (`notElem` branchNames) possibleNames of
     (c:_) -> Left (MissingBranch c)
     []    -> pure ()
-  -- Elaborate each branch
+  -- Elaborate each branch that was provided (skip impossible ones silently)
   mapM (checkBranch ctx dataDecl motiveTerm) rawBranches
+
+-- | Extract the type-level index arguments from a type application.
+--   E.g. VApp (VApp (VCon "Vec" []) natVal) gives [natVal].
+--   For a simple type like Bool (no indices) this is [].
+typeIndices :: Val -> [Val]
+typeIndices = reverse . go
+  where
+    go (VApp f a) = a : go f
+    go _          = []
+
+-- | Check whether a constructor is possibly applicable given the scrutinee indices.
+--   A constructor is *impossible* if its return-type indices are structurally
+--   incompatible (different rigid constructors) with the scrutinee indices.
+conIsPossible :: Ctx -> [Val] -> ConDecl -> Bool
+conIsPossible ctx scrutIdxs cd =
+  let l = ctxLvl ctx
+      ar = conArity cd
+      -- Extend context with fresh vars for each field
+      fieldVals = [VVar (l + i) | i <- [0..ar-1]]
+      retTy = applyPi (conType cd) fieldVals
+      conIdxs = typeIndices retTy
+  in not (definitlyDisjoint l scrutIdxs conIdxs)
+  where
+    -- Apply a Pi-type to a list of arguments, following closures.
+    applyPi (VPi _ _ bCl) (v:vs) = applyPi (closureApply bCl v) vs
+    applyPi ty            _      = ty
+
+-- | Return True if the two index lists are *provably* disjoint
+--   (i.e. at some position the scrutinee and constructor indices are both
+--   rigid VCon values with different head constructors).
+definitlyDisjoint :: Lvl -> [Val] -> [Val] -> Bool
+definitlyDisjoint l xs ys = any (uncurry disjoint) (zip xs ys)
+  where
+    disjoint a b = rigidHead a /= rigidHead b
+                   && rigidHead a /= Nothing
+                   && rigidHead b /= Nothing
+    rigidHead (VCon n _)  = Just n
+    rigidHead (VApp f _)  = rigidHead f
+    rigidHead _           = Nothing
 
 findDup :: Eq a => [a] -> Maybe a
 findDup [] = Nothing

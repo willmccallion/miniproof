@@ -14,6 +14,7 @@ tests = testGroup "Fixtures"
   , fixtureTest "recursion.pf"
   , fixtureTest "vec.pf"
   , fixtureTest "equality.pf"
+  , fixtureTest "fin.pf"
   ]
 
 fixtureTest :: FilePath -> TestTree
