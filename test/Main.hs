@@ -5,10 +5,12 @@ import Test.Tasty
 import Test.Eval qualified
 import Test.Check qualified
 import Test.Parser qualified
+import Test.Fixtures qualified
 
 main :: IO ()
 main = defaultMain $ testGroup "miniproof"
   [ Test.Eval.tests
   , Test.Check.tests
   , Test.Parser.tests
+  , Test.Fixtures.tests
   ]

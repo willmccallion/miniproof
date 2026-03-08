@@ -52,6 +52,7 @@ test-suite miniproof-test
         Test.Eval
         Test.Check
         Test.Parser
+        Test.Fixtures
     build-depends:
         base            ^>=4.20.2.0,
         miniproof,
