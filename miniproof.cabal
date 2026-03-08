@@ -34,12 +34,14 @@ library
 executable miniproof
     import:           warnings, optimised
     main-is:          Main.hs
+    other-modules:    Repl
     hs-source-dirs:   app
     build-depends:
         base            ^>=4.20.2.0,
         miniproof,
         text            >=2.1,
         megaparsec      >=9.6,
+        haskeline       >=0.8,
         optparse-applicative >=0.18
     default-language: GHC2024
 

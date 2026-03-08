@@ -57,9 +57,9 @@ rawTerm = choice [pLam, pLet, pPi, pMatch, pFix, pFunOrApp]
 pAtom :: Parser Raw
 pAtom = choice
   [ RType <$> pType
-  , pId
-  , pRefl
-  , pJ
+  , try pId
+  , try pRefl
+  , try pJ
   , RVar <$> identNotDef
   , parens rawTerm
   ]

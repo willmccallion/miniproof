@@ -2,7 +2,10 @@
 module Prover.Check
   ( check
   , infer
+  , checkType
   , checkProgram
+  , elaborateCon
+  , buildConVal
   , TypeError(..)
   ) where
 

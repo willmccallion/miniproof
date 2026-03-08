@@ -10,14 +10,17 @@ import Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 import Prover.Check
 import Prover.Parser
 import Prover.Pretty (prettyTermNs, prettyRaw)
+import Repl (runRepl)
 
 data Options = Options
-  { optFiles :: [FilePath]
+  { optRepl  :: Bool
+  , optFiles :: [FilePath]
   }
 
 optionsParser :: Parser Options
 optionsParser = Options
-  <$> some (argument str (metavar "FILE..." <> help "Proof file(s) to check"))
+  <$> switch (long "repl" <> short 'i' <> help "Start interactive REPL")
+  <*> many (argument str (metavar "FILE..." <> help "Proof file(s) to check"))
 
 main :: IO ()
 main = do
@@ -26,7 +29,9 @@ main = do
     <> progDesc "Type-check proof scripts"
     <> header "miniproof — a dependently-typed proof checker" )
 
-  mapM_ checkFile (optFiles opts)
+  if optRepl opts || null (optFiles opts)
+    then runRepl
+    else mapM_ checkFile (optFiles opts)
 
 checkFile :: FilePath -> IO ()
 checkFile path = do
