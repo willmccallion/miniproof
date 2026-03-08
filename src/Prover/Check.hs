@@ -12,7 +12,7 @@ import Data.List (find)
 import Text.Megaparsec.Pos (SourcePos)
 
 import Prover.Syntax
-import Prover.Eval
+import Prover.Eval (eval, quote, appVal, closureApply, convCheck, subtypeOf, matchVal)
 import Prover.Env
 
 -- ---------------------------------------------------------------------------
@@ -62,11 +62,11 @@ check ctx raw expected = case (raw, expected) of
     body' <- check ctx' body expected'
     pure (Let n aTy' e' body')
 
-  -- Fall through to infer + conversion check
+  -- Fall through to infer + subtype check (handles universe cumulativity)
   _ -> do
     (term, inferred) <- infer ctx raw
     let l = ctxLvl ctx
-    if convCheck l inferred expected
+    if subtypeOf l inferred expected
       then pure term
       else Left (TypeMismatch (quote l expected) (quote l inferred))
 

@@ -1,0 +1,45 @@
+data Bool : Type where
+  { true  : Bool
+  | false : Bool
+  }
+
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Universe cumulativity: Type k <= Type (k+1).
+-- Type 0 types (Bool, Nat) can be passed where Type 1 is expected.
+
+-- A function that works on Type 1 values:
+idLarge : forall (A : Type 1) -> A -> A
+        = \(A : Type 1) -> \(a : A) -> a
+
+-- Bool : Type 0, usable as a Type 1 argument via cumulativity.
+idBool : Bool -> Bool = idLarge Bool
+
+-- Nat likewise:
+idNat : Nat -> Nat = idLarge Nat
+
+-- Function types live in max(level domain, level codomain)+1.
+-- Bool -> Nat : Type 1 (since Bool : Type 0, Nat : Type 0, Pi : Type (max 0 0 + ... wait, max(k1,k2))).
+-- Actually Pi n (A : Type k1) (B : Type k2) : Type (max k1 k2).
+-- So Bool -> Nat : Type (max 1 1) = Type 1 (since inferring A : Type 0, kind = Type 1, k1=1; same for B).
+-- idLarge applied to (Bool -> Nat) — Bool -> Nat : Type 1 as a type. ✓
+
+idFun : (Bool -> Bool) -> (Bool -> Bool)
+      = idLarge (Bool -> Bool)
+
+-- const at level 1: takes two Type 1 types (Bool and Nat are both accepted by cumulativity)
+constLarge : forall (A : Type 1) -> forall (B : Type 1) -> A -> B -> A
+           = \(A : Type 1) -> \(B : Type 1) -> \(a : A) -> \(b : B) -> a
+
+constBoolNat : Bool -> Nat -> Bool = constLarge Bool Nat
+
+-- Type-level large eliminator: pick between two types
+ifThenElse : Bool -> Type -> Type -> Type
+           = \(b : Bool) -> \(T : Type) -> \(F : Type) ->
+               match b return (\(_ : Bool) -> Type) with
+               { true  -> T
+               | false -> F
+               }

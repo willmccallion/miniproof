@@ -5,6 +5,7 @@ module Prover.Eval
   , appVal
   , closureApply
   , convCheck
+  , subtypeOf
   , matchVal
   ) where
 
@@ -108,6 +109,21 @@ quote l = \case
 -- ---------------------------------------------------------------------------
 -- Conversion checking (are two values definitionally equal?)
 -- ---------------------------------------------------------------------------
+
+-- | Universe subtyping: Type k is a subtype of Type j when k <= j.
+--   Also covariant in Pi codomains and contravariant in domains (same variance).
+--   Returns True if v1 is a subtype of v2.
+subtypeOf :: Lvl -> Val -> Val -> Bool
+subtypeOf l v1 v2 = case (v1, v2) of
+  (VType k1, VType k2)  -> k1 <= k2
+  -- Pi types: contravariant in domain, covariant in codomain.
+  -- v1 = Pi x:A1.B1 <= Pi x:A2.B2  iff  A2 <= A1  and  B1 <= B2.
+  (VPi _ a1 cl1, VPi _ a2 cl2) ->
+    subtypeOf l a2 a1 &&
+    let v = VVar l
+    in subtypeOf (l + 1) (closureApply cl1 v) (closureApply cl2 v)
+  -- Fallback to definitional equality
+  _ -> convCheck l v1 v2
 
 convCheck :: Lvl -> Val -> Val -> Bool
 convCheck l v1 v2 = case (v1, v2) of
