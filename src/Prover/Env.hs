@@ -5,6 +5,7 @@ module Prover.Env
   , ctxDefine
   , ctxLookup
   , ctxLookupData
+  , ctxNames
   , Entry(..)
   , DataDecl(..)
   , ConDecl(..)
@@ -62,6 +63,10 @@ ctxDefine (Ctx es env l ds) n ty val = Ctx
   , ctxLvl     = l + 1
   , ctxData    = ds
   }
+
+-- | Extract ordered name list (innermost first) for pretty-printing.
+ctxNames :: Ctx -> [Name]
+ctxNames = map entryName . ctxEntries
 
 -- | Look up a name in the context. Returns (de Bruijn index, type).
 ctxLookup :: Ctx -> Text -> Maybe (Ix, Val)

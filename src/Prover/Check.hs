@@ -21,18 +21,18 @@ import Prover.Env
 
 data TypeError
   = UnboundVar Text
-  | TypeMismatch Term Term        -- expected, got (as normal forms)
-  | ExpectedPi Term               -- got this instead of a pi type
-  | ExpectedType Term             -- got this instead of Type k
-  | CannotInfer Raw               -- term needs annotation
+  | TypeMismatch [Name] Term Term  -- names, expected, got (as normal forms)
+  | ExpectedPi [Name] Term         -- names, got this instead of a pi type
+  | ExpectedType [Name] Term       -- names, got this instead of Type k
+  | CannotInfer Raw                -- term needs annotation
   | UnknownConstructor Name
   | UnknownDataType Name
   | WrongNumberOfArgs Name Int Int  -- con, expected, got
-  | MissingBranch Name            -- constructor not covered
-  | ExtraBranch Name              -- branch not a constructor of the type
+  | MissingBranch Name             -- constructor not covered
+  | ExtraBranch Name               -- branch not a constructor of the type
   | DuplicateBranch Name
-  | InDefinition Name TypeError   -- error located in a named definition
-  | At SourcePos TypeError        -- error with source location
+  | InDefinition Name TypeError    -- error located in a named definition
+  | At SourcePos TypeError         -- error with source location
   deriving (Show, Eq)
 
 -- ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ check ctx raw expected = case (raw, expected) of
     let l = ctxLvl ctx
     if subtypeOf l inferred expected
       then pure term
-      else Left (TypeMismatch (quote l expected) (quote l inferred))
+      else Left (TypeMismatch (ctxNames ctx) (quote l expected) (quote l inferred))
 
 -- | Infer the type of a raw term.
 infer :: Ctx -> Raw -> Either TypeError (Term, Val)
@@ -86,7 +86,7 @@ infer ctx = \case
         a' <- check ctx a aTy
         let aVal = eval (ctxEnv ctx) a'
         pure (App f' a', closureApply bCl aVal)
-      other -> Left (ExpectedPi (quote (ctxLvl ctx) other))
+      other -> Left (ExpectedPi (ctxNames ctx) (quote (ctxLvl ctx) other))
 
   RPi n aTy bTy -> do
     (aTy', aK) <- infer ctx aTy
@@ -157,13 +157,13 @@ infer ctx = \case
     -- fTy must be a Pi; extract domain (argTy) and codomain closure (retTy).
     (argTyVal, retCl) <- case fTyVal of
       VPi _ dom bCl -> pure (dom, bCl)
-      other         -> Left (ExpectedPi (quote (ctxLvl ctx) other))
+      other         -> Left (ExpectedPi (ctxNames ctx) (quote (ctxLvl ctx) other))
     -- Check that the explicit argTy annotation matches the domain of fTy.
     argTy' <- checkType ctx rawArgTy
     let argTyVal' = eval (ctxEnv ctx) argTy'
     let l = ctxLvl ctx
     if not (convCheck l argTyVal argTyVal')
-      then Left (TypeMismatch (quote l argTyVal) (quote l argTyVal'))
+      then Left (TypeMismatch (ctxNames ctx) (quote l argTyVal) (quote l argTyVal'))
       else pure ()
     -- We need body to have: Var 0 = x (arg), Var 1 = f (self).
     -- Bind x at level l (will be index 1 after we add f on top).
@@ -238,7 +238,7 @@ checkType ctx raw = do
 ensureType :: Ctx -> Val -> Either TypeError Int
 ensureType ctx = \case
   VType k -> pure k
-  other   -> Left (ExpectedType (quote (ctxLvl ctx) other))
+  other   -> Left (ExpectedType (ctxNames ctx) (quote (ctxLvl ctx) other))
 
 -- | Look up a constructor by name across all data declarations in context.
 lookupCon :: Ctx -> Name -> Either TypeError ConDecl
@@ -259,7 +259,7 @@ checkConArgs ctx (r:rs) (VPi _ dom bCl) = do
   (rest', retTy) <- checkConArgs ctx rs (closureApply bCl rVal)
   pure (r' : rest', retTy)
 checkConArgs ctx [] (VPi _ _ _) = Left (WrongNumberOfArgs "<con>" 0 0) -- too few
-checkConArgs ctx _ ty = Left (ExpectedPi (quote (ctxLvl ctx) ty))
+checkConArgs ctx _ ty = Left (ExpectedPi (ctxNames ctx) (quote (ctxLvl ctx) ty))
 
 -- | Find the DataDecl for the head of a type value (e.g. VVar or VApp).
 resolveDataDecl :: Ctx -> Val -> Either TypeError DataDecl
@@ -391,7 +391,7 @@ extendWithFields ctx (n:ns) (VPi _ dom bCl) = do
   (ctx'', rest) <- extendWithFields ctx' ns (closureApply bCl fieldVal)
   pure (ctx'', dom : rest)
 extendWithFields ctx (_:_) ty =
-  Left (ExpectedPi (quote (ctxLvl ctx) ty))
+  Left (ExpectedPi (ctxNames ctx) (quote (ctxLvl ctx) ty))
 
 -- ---------------------------------------------------------------------------
 -- Top-level program checking

@@ -9,7 +9,7 @@ import Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 
 import Prover.Check
 import Prover.Parser
-import Prover.Pretty
+import Prover.Pretty (prettyTermNs, prettyRaw)
 
 data Options = Options
   { optFiles :: [FilePath]
@@ -62,13 +62,13 @@ printLeaf :: TypeError -> IO ()
 printLeaf = \case
   UnboundVar n ->
     putStrLn $ "  unbound variable: " <> T.unpack n
-  TypeMismatch expected got ->
-    putStrLn $ "  expected: " <> T.unpack (prettyTerm expected)
-            <> "\n  got:      " <> T.unpack (prettyTerm got)
-  ExpectedPi got ->
-    putStrLn $ "  expected function type, got: " <> T.unpack (prettyTerm got)
-  ExpectedType got ->
-    putStrLn $ "  expected Type, got: " <> T.unpack (prettyTerm got)
+  TypeMismatch ns expected got ->
+    putStrLn $ "  expected: " <> T.unpack (prettyTermNs ns expected)
+            <> "\n  got:      " <> T.unpack (prettyTermNs ns got)
+  ExpectedPi ns got ->
+    putStrLn $ "  expected function type, got: " <> T.unpack (prettyTermNs ns got)
+  ExpectedType ns got ->
+    putStrLn $ "  expected Type, got: " <> T.unpack (prettyTermNs ns got)
   CannotInfer raw ->
     putStrLn $ "  cannot infer type for: " <> T.unpack (prettyRaw raw)
   UnknownConstructor n ->

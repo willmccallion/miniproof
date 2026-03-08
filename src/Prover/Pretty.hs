@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Prover.Pretty
   ( prettyTerm
+  , prettyTermNs
   , prettyRaw
   ) where
 
@@ -12,69 +13,77 @@ import Prover.Syntax
 -- Pretty-print core terms (de Bruijn -> named using a name supply)
 -- ---------------------------------------------------------------------------
 
+-- | Pretty-print with an initial name context (innermost name first).
+prettyTermNs :: [Name] -> Term -> Text
+prettyTermNs = goTerm
+
 prettyTerm :: Term -> Text
-prettyTerm = go []
-  where
-    go :: [Name] -> Term -> Text
-    go ns = \case
-      Var ix
-        | ix < length ns -> ns !! ix
-        | otherwise      -> "?" <> T.pack (show ix)
-      Lam n body ->
-        let n' = freshen ns n
-        in "\\(" <> n' <> ") -> " <> go (n' : ns) body
-      App f a -> goApp ns f <> " " <> goAtom ns a
-      Pi n a b
-        | n == "_"  -> goAtom ns a <> " -> " <> go ("_" : ns) b
-        | otherwise ->
-            let n' = freshen ns n
-            in "forall (" <> n' <> " : " <> go ns a <> ") -> " <> go (n' : ns) b
-      Type 0 -> "Type"
-      Type k -> "Type " <> T.pack (show k)
-      Let n ty e body ->
-        let n' = freshen ns n
-        in "let " <> n' <> " : " <> go ns ty <> " = " <> go ns e
-           <> " in " <> go (n' : ns) body
-      Fix f x _aTy _rTy body ->
-        let f' = freshen ns f
-            x' = freshen (f':ns) x
-        in "fix (" <> f' <> ") (" <> x' <> ") = " <> go (x' : f' : ns) body
-      Con c []   -> c
-      Con c args -> c <> " " <> T.intercalate " " (map (goAtom ns) args)
-      Match t motive branches ->
-        "match " <> go ns t <> " return " <> go ns motive <> " with { "
-        <> T.intercalate " | " (map (goBranch ns) branches)
-        <> " }"
-      TId a x y ->
-        "Id " <> goAtom ns a <> " " <> goAtom ns x <> " " <> goAtom ns y
-      TRefl a x ->
-        "refl " <> goAtom ns a <> " " <> goAtom ns x
-      TJ a x p pr b prf ->
-        "J " <> T.unwords (map (goAtom ns) [a, x, p, pr, b, prf])
+prettyTerm = goTerm []
 
-    goBranch ns (c, ar, body) =
-      let (ns', xs) = freshNames ns ar
-      in c <> (if null xs then "" else " " <> T.unwords xs)
-         <> " -> " <> go ns' body
+goTerm :: [Name] -> Term -> Text
+goTerm ns = \case
+  Var ix
+    | ix < length ns -> ns !! ix
+    | otherwise      -> "?" <> T.pack (show ix)
+  Lam n body ->
+    let n' = freshenName ns n
+    in "\\(" <> n' <> ") -> " <> goTerm (n' : ns) body
+  App f a -> goTermApp ns f <> " " <> goTermAtom ns a
+  Pi n a b
+    | n == "_"  -> goTermAtom ns a <> " -> " <> goTerm ("_" : ns) b
+    | otherwise ->
+        let n' = freshenName ns n
+        in "forall (" <> n' <> " : " <> goTerm ns a <> ") -> " <> goTerm (n' : ns) b
+  Type 0 -> "Type"
+  Type k -> "Type " <> T.pack (show k)
+  Let n ty e body ->
+    let n' = freshenName ns n
+    in "let " <> n' <> " : " <> goTerm ns ty <> " = " <> goTerm ns e
+       <> " in " <> goTerm (n' : ns) body
+  Fix f x _aTy _rTy body ->
+    let f' = freshenName ns f
+        x' = freshenName (f':ns) x
+    in "fix (" <> f' <> ") (" <> x' <> ") = " <> goTerm (x' : f' : ns) body
+  Con c []   -> c
+  Con c args -> c <> " " <> T.intercalate " " (map (goTermAtom ns) args)
+  Match t motive branches ->
+    "match " <> goTerm ns t <> " return " <> goTerm ns motive <> " with { "
+    <> T.intercalate " | " (map (goTermBranch ns) branches)
+    <> " }"
+  TId a x y ->
+    "Id " <> goTermAtom ns a <> " " <> goTermAtom ns x <> " " <> goTermAtom ns y
+  TRefl a x ->
+    "refl " <> goTermAtom ns a <> " " <> goTermAtom ns x
+  TJ a x p pr b prf ->
+    "J " <> T.unwords (map (goTermAtom ns) [a, x, p, pr, b, prf])
 
-    freshNames ns 0 = (ns, [])
-    freshNames ns n =
-      let x  = freshen ns "x"
-          (ns', xs) = freshNames (x : ns) (n - 1)
-      in (ns', x : xs)
+goTermBranch :: [Name] -> (Name, Int, Term) -> Text
+goTermBranch ns (c, ar, body) =
+  let (ns', xs) = freshNames ns ar
+  in c <> (if null xs then "" else " " <> T.unwords xs)
+     <> " -> " <> goTerm ns' body
 
-    goApp ns (App f a) = goApp ns f <> " " <> goAtom ns a
-    goApp ns t         = goAtom ns t
+freshNames :: [Name] -> Int -> ([Name], [Name])
+freshNames ns 0 = (ns, [])
+freshNames ns n =
+  let x  = freshenName ns "x"
+      (ns', xs) = freshNames (x : ns) (n - 1)
+  in (ns', x : xs)
 
-    goAtom ns t@(Var _)    = go ns t
-    goAtom ns t@(Type _)   = go ns t
-    goAtom ns t@(Con _ []) = go ns t
-    goAtom ns t            = "(" <> go ns t <> ")"
+goTermApp :: [Name] -> Term -> Text
+goTermApp ns (App f a) = goTermApp ns f <> " " <> goTermAtom ns a
+goTermApp ns t         = goTermAtom ns t
 
-    freshen :: [Name] -> Name -> Name
-    freshen ns n
-      | n `elem` ns = freshen ns (n <> "'")
-      | otherwise   = n
+goTermAtom :: [Name] -> Term -> Text
+goTermAtom ns t@(Var _)    = goTerm ns t
+goTermAtom ns t@(Type _)   = goTerm ns t
+goTermAtom ns t@(Con _ []) = goTerm ns t
+goTermAtom ns t            = "(" <> goTerm ns t <> ")"
+
+freshenName :: [Name] -> Name -> Name
+freshenName ns n
+  | n `elem` ns = freshenName ns (n <> "'")
+  | otherwise   = n
 
 -- ---------------------------------------------------------------------------
 -- Pretty-print raw syntax (for error messages)
