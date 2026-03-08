@@ -37,7 +37,7 @@ braces :: Parser a -> Parser a
 braces = between (symbol "{") (symbol "}")
 
 reserved :: [Text]
-reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with", "fix"]
+reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with", "fix", "Id", "refl", "J"]
 
 ident :: Parser Text
 ident = lexeme $ try $ do
@@ -58,9 +58,38 @@ rawTerm = choice [pLam, pLet, pPi, pMatch, pFix, pFunOrApp]
 pAtom :: Parser Raw
 pAtom = choice
   [ RType <$> pType
+  , pId
+  , pRefl
+  , pJ
   , RVar <$> identNotDef
   , parens rawTerm
   ]
+
+pId :: Parser Raw
+pId = do
+  _ <- symbol "Id"
+  a  <- pAtom
+  x  <- pAtom
+  y  <- pAtom
+  pure (RId a x y)
+
+pRefl :: Parser Raw
+pRefl = do
+  _ <- symbol "refl"
+  a <- pAtom
+  x <- pAtom
+  pure (RRefl a x)
+
+pJ :: Parser Raw
+pJ = do
+  _ <- symbol "J"
+  a   <- pAtom
+  x   <- pAtom
+  p   <- pAtom
+  pr  <- pAtom
+  b   <- pAtom
+  prf <- pAtom
+  pure (RJ a x p pr b prf)
 
 -- | Parse an identifier, but fail if it looks like the start of a new
 -- top-level definition (ident followed by ':').  This prevents a

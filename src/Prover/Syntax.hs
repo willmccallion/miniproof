@@ -29,6 +29,10 @@ data Raw
   | RFix Name Raw Name Raw Raw
     -- fix (f : A) (x : B) = body
     -- f is the self-reference, x is the argument binder
+  -- Propositional equality primitives
+  | RId Raw Raw Raw             -- Id A a b
+  | RRefl Raw Raw               -- refl A a
+  | RJ Raw Raw Raw Raw Raw Raw  -- J A a P pr b p
   deriving (Show, Eq)
 
 -- | A raw constructor declaration: name followed by field types.
@@ -62,6 +66,12 @@ data Term
     -- argTy: type of x, retTy: return type (may mention x)
     -- body: has f at index 1, x at index 0
     -- Represents: fix f x = body, with type (x : argTy) -> retTy
+  -- Propositional equality
+  | TId Term Term Term           -- Id A a b  (the type)
+  | TRefl Term Term              -- refl A a  (the proof)
+  | TJ Term Term Term Term Term Term
+    -- J A a P pr b p
+    -- J : (A:Type) -> (a:A) -> (P:(b:A)->Id A a b->Type) -> P a (refl A a) -> (b:A) -> (p:Id A a b) -> P b p
   deriving (Show, Eq)
 
 -- ---------------------------------------------------------------------------
@@ -82,6 +92,10 @@ data Val
     -- bodyClosure env body where body has f at index 1, x at index 0
     -- Applying (VFix f cl) to arg evaluates body with:
     --   env[0] = arg, env[1] = (VFix f cl)  (the self-reference)
+  -- Propositional equality
+  | VId Val Val Val              -- Id A a b
+  | VRefl Val Val                -- refl A a
+  | VJ Val Val Val Val Val Val   -- neutral J (proof is not refl)
 
 data Closure = Closure Env Term
 

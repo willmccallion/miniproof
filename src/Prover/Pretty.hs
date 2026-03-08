@@ -45,6 +45,12 @@ prettyTerm = go []
         "match " <> go ns t <> " return " <> go ns motive <> " with { "
         <> T.intercalate " | " (map (goBranch ns) branches)
         <> " }"
+      TId a x y ->
+        "Id " <> goAtom ns a <> " " <> goAtom ns x <> " " <> goAtom ns y
+      TRefl a x ->
+        "refl " <> goAtom ns a <> " " <> goAtom ns x
+      TJ a x p pr b prf ->
+        "J " <> T.unwords (map (goAtom ns) [a, x, p, pr, b, prf])
 
     goBranch ns (c, ar, body) =
       let (ns', xs) = freshNames ns ar
@@ -98,6 +104,10 @@ prettyRaw = \case
                           <> " -> " <> prettyRaw b
                         | (c, xs, b) <- bs ]
                    <> " }"
+  RId a x y    -> "Id " <> prettyRawAtom a <> " " <> prettyRawAtom x <> " " <> prettyRawAtom y
+  RRefl a x    -> "refl " <> prettyRawAtom a <> " " <> prettyRawAtom x
+  RJ a x p pr b prf ->
+    "J " <> T.unwords (map prettyRawAtom [a, x, p, pr, b, prf])
 
 prettyRawApp :: Raw -> Text
 prettyRawApp (RApp f a) = prettyRawApp f <> " " <> prettyRawAtom a

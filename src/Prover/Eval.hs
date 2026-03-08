@@ -35,6 +35,14 @@ eval env = \case
     -- Applying VFix to an arg gives: eval (arg : self : env) body
     let self = VFix f (Closure env body)
     in self
+  TId a x y  -> VId (eval env a) (eval env x) (eval env y)
+  TRefl a x  -> VRefl (eval env a) (eval env x)
+  TJ a x p pr b prf ->
+    let vPrf = eval env prf
+    in case vPrf of
+      VRefl _ _ -> eval env pr   -- J A a P pr a refl ~> pr
+      _         -> VJ (eval env a) (eval env x) (eval env p)
+                      (eval env pr) (eval env b) vPrf
 
 appVal :: Val -> Val -> Val
 appVal (VLam _ cl)    arg = closureApply cl arg
@@ -92,6 +100,10 @@ quote l = \case
         in (c, ar, quote (l + ar) body)
       | (c, ar, Closure env b) <- branches
       ]
+  VId a x y    -> TId (quote l a) (quote l x) (quote l y)
+  VRefl a x    -> TRefl (quote l a) (quote l x)
+  VJ a x p pr b prf -> TJ (quote l a) (quote l x) (quote l p)
+                           (quote l pr) (quote l b) (quote l prf)
 
 -- ---------------------------------------------------------------------------
 -- Conversion checking (are two values definitionally equal?)
@@ -133,4 +145,11 @@ convCheck l v1 v2 = case (v1, v2) of
           in convCheck (l + ar1) v1' v2'
         | ((c1, ar1, Closure env1 b1), (c2, ar2, Closure env2 b2)) <- zip bs1 bs2
         ]
+  (VId a1 x1 y1, VId a2 x2 y2) ->
+    convCheck l a1 a2 && convCheck l x1 x2 && convCheck l y1 y2
+  (VRefl a1 x1, VRefl a2 x2) ->
+    convCheck l a1 a2 && convCheck l x1 x2
+  (VJ a1 x1 p1 pr1 b1 prf1, VJ a2 x2 p2 pr2 b2 prf2) ->
+    convCheck l a1 a2 && convCheck l x1 x2 && convCheck l p1 p2 &&
+    convCheck l pr1 pr2 && convCheck l b1 b2 && convCheck l prf1 prf2
   _ -> False

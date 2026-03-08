@@ -1,0 +1,42 @@
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Reflexivity is built-in as refl, but we can alias it:
+refl_nat : forall (n : Nat) -> Id Nat n n
+         = \(n : Nat) -> refl Nat n
+
+-- Symmetry: Id A a b -> Id A b a
+sym : forall (A : Type) -> forall (a : A) -> forall (b : A) -> Id A a b -> Id A b a
+    = \(A : Type) -> \(a : A) -> \(b : A) -> \(p : Id A a b) ->
+        J A a (\(b : A) -> \(_ : Id A a b) -> Id A b a)
+              (refl A a)
+              b p
+
+-- Transitivity: Id A a b -> Id A b c -> Id A a c
+trans : forall (A : Type) -> forall (a : A) -> forall (b : A) -> forall (c : A)
+      -> Id A a b -> Id A b c -> Id A a c
+      = \(A : Type) -> \(a : A) -> \(b : A) -> \(c : A)
+      -> \(p : Id A a b) -> \(q : Id A b c) ->
+           J A b (\(c : A) -> \(_ : Id A b c) -> Id A a c)
+                 p
+                 c q
+
+-- Congruence: a = b -> f a = f b
+cong : forall (A : Type) -> forall (B : Type) -> forall (a : A) -> forall (b : A)
+     -> forall (f : A -> B) -> Id A a b -> Id B (f a) (f b)
+     = \(A : Type) -> \(B : Type) -> \(a : A) -> \(b : A)
+     -> \(f : A -> B) -> \(p : Id A a b) ->
+          J A a (\(b : A) -> \(_ : Id A a b) -> Id B (f a) (f b))
+                (refl B (f a))
+                b p
+
+-- Substitution: Id A a b -> P a -> P b
+subst : forall (A : Type) -> forall (a : A) -> forall (b : A)
+      -> forall (P : A -> Type) -> Id A a b -> P a -> P b
+      = \(A : Type) -> \(a : A) -> \(b : A)
+      -> \(P : A -> Type) -> \(p : Id A a b) -> \(pa : P a) ->
+           J A a (\(b : A) -> \(_ : Id A a b) -> P b)
+                 pa
+                 b p

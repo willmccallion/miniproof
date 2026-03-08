@@ -170,6 +170,49 @@ infer ctx = \case
     body' <- check ctxXF rawBody retTyVal
     pure (Fix f x argTy' retTy' body', fTyVal)
 
+  -- Id A a b : Type k  where A : Type k
+  RId rawA rawA1 rawA2 -> do
+    (a', aTy) <- infer ctx rawA
+    k <- ensureType ctx aTy
+    let aVal = eval (ctxEnv ctx) a'
+    a1' <- check ctx rawA1 aVal
+    a2' <- check ctx rawA2 aVal
+    pure (TId a' a1' a2', VType k)
+
+  -- refl A a : Id A a a
+  RRefl rawA rawA1 -> do
+    a' <- checkType ctx rawA
+    let aVal = eval (ctxEnv ctx) a'
+    a1' <- check ctx rawA1 aVal
+    let a1Val = eval (ctxEnv ctx) a1'
+    pure (TRefl a' a1', VId aVal a1Val a1Val)
+
+  -- J A a P pr b p : P b p
+  -- J : (A:Type) -> (a:A) -> (P:(b:A)->Id A a b->Type) -> P a (refl A a) -> (b:A) -> (p:Id A a b) -> P b p
+  RJ rawA rawA1 rawP rawPr rawB rawPrf -> do
+    a'  <- checkType ctx rawA
+    let aVal = eval (ctxEnv ctx) a'
+    a1' <- check ctx rawA1 aVal
+    let a1Val = eval (ctxEnv ctx) a1'
+    -- P : (b : A) -> Id A a b -> Type
+    let pTy = VPi "b" aVal (Closure (ctxEnv ctx)
+                (Pi "_" (TId a' a1' (Var 0)) (Type 0)))
+    p'  <- check ctx rawP pTy
+    let pVal = eval (ctxEnv ctx) p'
+    -- pr : P a (refl A a)
+    let prTy = appVal (appVal pVal a1Val) (VRefl aVal a1Val)
+    pr' <- check ctx rawPr prTy
+    -- b : A
+    b'  <- check ctx rawB aVal
+    let bVal = eval (ctxEnv ctx) b'
+    -- p : Id A a b
+    let prf_ty = VId aVal a1Val bVal
+    prf' <- check ctx rawPrf prf_ty
+    let prfVal = eval (ctxEnv ctx) prf'
+    -- result type: P b p
+    let retTy = appVal (appVal pVal bVal) prfVal
+    pure (TJ a' a1' p' pr' b' prf', retTy)
+
   other -> Left (CannotInfer other)
 
 -- ---------------------------------------------------------------------------
