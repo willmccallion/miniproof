@@ -130,23 +130,6 @@ idFun : (Bool -> Bool) -> (Bool -> Bool)
       = id (lsucc lzero) (Bool -> Bool)
 ```
 
-## Example: Peano arithmetic proofs
-
-`test/fixtures/peano.pf` proves commutativity and associativity of addition via structural induction and path induction (`J`):
-
-```
-add : Nat -> Nat -> Nat
-    = \(m : Nat) ->
-        fix (f : Nat -> Nat) (n : Nat) =
-          match n return (\(_ : Nat) -> Nat) with
-          { zero   -> m
-          | succ k -> succ (f k)
-          }
-
-add_comm : forall (n : Nat) -> forall (m : Nat) -> Id Nat (add n m) (add m n)
-         = ...
-```
-
 ## Example: dependent vectors
 
 `test/fixtures/vec.pf` defines length-indexed vectors:
@@ -191,6 +174,7 @@ The implementation uses standard techniques from dependent type theory:
 - No implicit arguments or elaboration of missing level arguments.
 - `leLevel` is sound but incomplete for arbitrary level expressions with neutral variables (handles common cases).
 - No level metavariables: level arguments must be supplied explicitly.
+- Inductive proofs combining `fix` and `J` (e.g. commutativity of addition) hang during type-checking — the checker does not reduce under `fix` during conversion, so recursive equality proofs loop.
 
 ## Tests
 
@@ -210,4 +194,3 @@ Test fixtures in `test/fixtures/`:
 | `fin.pf` | Finite sets, index refinement, impossible branches |
 | `universe.pf` | Universe cumulativity |
 | `levels.pf` | Universe level polymorphism |
-| `peano.pf` | add_comm, add_assoc (full proofs) |
