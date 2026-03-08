@@ -16,6 +16,7 @@ tests = testGroup "Fixtures"
   , fixtureTest "equality.pf"
   , fixtureTest "fin.pf"
   , fixtureTest "universe.pf"
+  , fixtureTest "levels.pf"
   ]
 
 fixtureTest :: FilePath -> TestTree

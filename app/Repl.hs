@@ -132,6 +132,7 @@ fmtError = go Nothing
         <> "\n  got:      " <> T.unpack (prettyTermNs ns g)
       ExpectedPi ns g     -> "expected function type, got: " <> T.unpack (prettyTermNs ns g)
       ExpectedType ns g   -> "expected Type, got: "         <> T.unpack (prettyTermNs ns g)
+      ExpectedLevel n     -> "expected Level variable, got non-level: " <> T.unpack n
       CannotInfer raw     -> "cannot infer type for: "      <> T.unpack (prettyRaw raw)
       UnknownConstructor n -> "unknown constructor: "       <> T.unpack n
       UnknownDataType n   -> "unknown data type: "          <> T.unpack n

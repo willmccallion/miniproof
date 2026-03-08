@@ -1,0 +1,52 @@
+-- Universe level polymorphism
+-- Level is a built-in type. Levels: lzero, lsucc l, lmax l m.
+-- Type l : Type (lsucc l).
+
+data Bool : Type where
+  { true  : Bool
+  | false : Bool
+  }
+
+data Nat : Type where
+  { zero : Nat
+  | succ : Nat -> Nat
+  }
+
+-- Level-polymorphic identity: works at any universe level.
+id : forall (l : Level) -> forall (A : Type l) -> A -> A
+   = \(l : Level) -> \(A : Type l) -> \(a : A) -> a
+
+-- Apply id at level lzero to Bool
+idBool : Bool -> Bool = id lzero Bool
+
+-- Apply id at level lzero to Nat
+idNat : Nat -> Nat = id lzero Nat
+
+-- Apply id at level (lsucc lzero) to (Bool -> Bool)
+-- Bool -> Bool : Type (lmax (lsucc lzero) (lsucc lzero)) = Type (lsucc lzero)
+idFun : (Bool -> Bool) -> (Bool -> Bool) = id (lsucc lzero) (Bool -> Bool)
+
+-- Level-polymorphic const
+const : forall (l : Level) -> forall (m : Level)
+      -> forall (A : Type l) -> forall (B : Type m)
+      -> A -> B -> A
+      = \(l : Level) -> \(m : Level)
+      -> \(A : Type l) -> \(B : Type m)
+      -> \(a : A) -> \(b : B) -> a
+
+-- const applied at level lzero
+constBoolNat : Bool -> Nat -> Bool = const lzero lzero Bool Nat
+
+-- Level-polymorphic compose
+compose : forall (l : Level) -> forall (m : Level) -> forall (n : Level)
+        -> forall (A : Type l) -> forall (B : Type m) -> forall (C : Type n)
+        -> (B -> C) -> (A -> B) -> A -> C
+        = \(l : Level) -> \(m : Level) -> \(n : Level)
+        -> \(A : Type l) -> \(B : Type m) -> \(C : Type n)
+        -> \(g : B -> C) -> \(f : A -> B) -> \(x : A) -> g (f x)
+
+-- Using compose at base level
+notNot : Bool -> Bool
+       = compose lzero lzero lzero Bool Bool Bool
+           (\(b : Bool) -> match b return (\(_ : Bool) -> Bool) with { true -> false | false -> true })
+           (\(b : Bool) -> match b return (\(_ : Bool) -> Bool) with { true -> false | false -> true })

@@ -10,6 +10,30 @@ import Data.Text qualified as T
 import Prover.Syntax
 
 -- ---------------------------------------------------------------------------
+-- Pretty-print level expressions
+-- ---------------------------------------------------------------------------
+
+prettyLevelExpr :: [Name] -> LevelExpr -> Text
+prettyLevelExpr _ns LZero        = "lzero"
+prettyLevelExpr ns  (LSucc le)   = "lsucc " <> prettyLevelExprAtom ns le
+prettyLevelExpr ns  (LMax l1 l2) = "lmax " <> prettyLevelExprAtom ns l1
+                                            <> " " <> prettyLevelExprAtom ns l2
+prettyLevelExpr ns  (LVar ix)
+  | ix < length ns = ns !! ix
+  | otherwise      = "?" <> T.pack (show ix)
+prettyLevelExpr _ns (LVarN n)    = n
+
+prettyLevelExprAtom :: [Name] -> LevelExpr -> Text
+prettyLevelExprAtom ns le@(LSucc _)  = "(" <> prettyLevelExpr ns le <> ")"
+prettyLevelExprAtom ns le@(LMax _ _) = "(" <> prettyLevelExpr ns le <> ")"
+prettyLevelExprAtom ns le            = prettyLevelExpr ns le
+
+-- | Pretty-print a level as it appears after 'Type'.
+prettyTypeLevel :: [Name] -> LevelExpr -> Text
+prettyTypeLevel _ns LZero = ""            -- Type 0 is just "Type"
+prettyTypeLevel ns  le    = " " <> prettyLevelExprAtom ns le
+
+-- ---------------------------------------------------------------------------
 -- Pretty-print core terms (de Bruijn -> named using a name supply)
 -- ---------------------------------------------------------------------------
 
@@ -34,8 +58,11 @@ goTerm ns = \case
     | otherwise ->
         let n' = freshenName ns n
         in "forall (" <> n' <> " : " <> goTerm ns a <> ") -> " <> goTerm (n' : ns) b
-  Type 0 -> "Type"
-  Type k -> "Type " <> T.pack (show k)
+  Type le -> "Type" <> prettyTypeLevel ns le
+  TLevel  -> "Level"
+  TLZero  -> "lzero"
+  TLSucc t -> "lsucc " <> goTermAtom ns t
+  TLMax t1 t2 -> "lmax " <> goTermAtom ns t1 <> " " <> goTermAtom ns t2
   Let n ty e body ->
     let n' = freshenName ns n
     in "let " <> n' <> " : " <> goTerm ns ty <> " = " <> goTerm ns e
@@ -77,6 +104,8 @@ goTermApp ns t         = goTermAtom ns t
 goTermAtom :: [Name] -> Term -> Text
 goTermAtom ns t@(Var _)    = goTerm ns t
 goTermAtom ns t@(Type _)   = goTerm ns t
+goTermAtom ns t@TLevel     = goTerm ns t
+goTermAtom ns t@TLZero     = goTerm ns t
 goTermAtom ns t@(Con _ []) = goTerm ns t
 goTermAtom ns t            = "(" <> goTerm ns t <> ")"
 
@@ -97,8 +126,11 @@ prettyRaw = \case
   RPi n a b
     | n == "_"  -> prettyRawAtom a <> " -> " <> prettyRaw b
     | otherwise -> "forall (" <> n <> " : " <> prettyRaw a <> ") -> " <> prettyRaw b
-  RType 0      -> "Type"
-  RType k      -> "Type " <> T.pack (show k)
+  RType le     -> "Type" <> prettyTypeLevel [] le
+  RLevel       -> "Level"
+  RLZero       -> "lzero"
+  RLSucc r     -> "lsucc " <> prettyRawAtom r
+  RLMax r1 r2  -> "lmax " <> prettyRawAtom r1 <> " " <> prettyRawAtom r2
   RLet n ty e b -> "let " <> n <> " : " <> prettyRaw ty <> " = " <> prettyRaw e
                    <> " in " <> prettyRaw b
   RAnn e ty    -> "(" <> prettyRaw e <> " : " <> prettyRaw ty <> ")"
@@ -126,5 +158,7 @@ prettyRawApp t          = prettyRawAtom t
 prettyRawAtom :: Raw -> Text
 prettyRawAtom t@(RVar _)     = prettyRaw t
 prettyRawAtom t@(RType _)    = prettyRaw t
+prettyRawAtom t@RLevel       = prettyRaw t
+prettyRawAtom t@RLZero       = prettyRaw t
 prettyRawAtom t@(RCon _ [])  = prettyRaw t
 prettyRawAtom t               = "(" <> prettyRaw t <> ")"

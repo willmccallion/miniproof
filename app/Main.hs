@@ -74,6 +74,8 @@ printLeaf = \case
     putStrLn $ "  expected function type, got: " <> T.unpack (prettyTermNs ns got)
   ExpectedType ns got ->
     putStrLn $ "  expected Type, got: " <> T.unpack (prettyTermNs ns got)
+  ExpectedLevel n ->
+    putStrLn $ "  expected Level variable, got non-level: " <> T.unpack n
   CannotInfer raw ->
     putStrLn $ "  cannot infer type for: " <> T.unpack (prettyRaw raw)
   UnknownConstructor n ->

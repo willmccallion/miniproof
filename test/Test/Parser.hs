@@ -32,11 +32,11 @@ tests = testGroup "Parser"
 
   , testCase "Type" $ do
       let Right t = parseRaw "Type"
-      t @?= RType 0
+      t @?= RType LZero
 
   , testCase "Type with level" $ do
       let Right t = parseRaw "Type 1"
-      t @?= RType 1
+      t @?= RType (LSucc LZero)
 
   , testCase "lambda" $ do
       let Right t = parseRaw "\\(x : A) -> x"
@@ -52,7 +52,7 @@ tests = testGroup "Parser"
 
   , testCase "forall" $ do
       let Right t = parseRaw "forall (A : Type) -> A"
-      t @?= RPi "A" (RType 0) (RVar "A")
+      t @?= RPi "A" (RType LZero) (RVar "A")
 
   , testCase "let" $ do
       let Right t = parseRaw "let x : A = e in x"
@@ -61,8 +61,8 @@ tests = testGroup "Parser"
   , testCase "definition" $ do
       let Right (RDef n ty body) = parseDef "id : forall (A : Type) -> A -> A = \\(A : Type) -> \\(a : A) -> a"
       n @?= "id"
-      stripPos ty @?= RPi "A" (RType 0) (RPi "_" (RVar "A") (RVar "A"))
-      stripPos body @?= RLam "A" (RType 0) (RLam "a" (RVar "A") (RVar "a"))
+      stripPos ty @?= RPi "A" (RType LZero) (RPi "_" (RVar "A") (RVar "A"))
+      stripPos body @?= RLam "A" (RType LZero) (RLam "a" (RVar "A") (RVar "a"))
 
   , testCase "multiple definitions" $ do
       let Right defs = parseFile "id : Type -> Type = \\(A : Type) -> A\nconst : Type = Type"

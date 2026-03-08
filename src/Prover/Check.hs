@@ -15,7 +15,8 @@ import Data.List (find)
 import Text.Megaparsec.Pos (SourcePos)
 
 import Prover.Syntax
-import Prover.Eval (eval, quote, appVal, closureApply, convCheck, subtypeOf, matchVal)
+import Prover.Eval (eval, quote, appVal, closureApply, convCheck, subtypeOf, matchVal,
+                    evalLevel, vlevelMax)
 import Prover.Env
 
 -- ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ data TypeError
   | TypeMismatch [Name] Term Term  -- names, expected, got (as normal forms)
   | ExpectedPi [Name] Term         -- names, got this instead of a pi type
   | ExpectedType [Name] Term       -- names, got this instead of Type k
+  | ExpectedLevel Name             -- name used where a Level was expected
   | CannotInfer Raw                -- term needs annotation
   | UnknownConstructor Name
   | UnknownDataType Name
@@ -37,6 +39,24 @@ data TypeError
   | InDefinition Name TypeError    -- error located in a named definition
   | At SourcePos TypeError         -- error with source location
   deriving (Show, Eq)
+
+-- ---------------------------------------------------------------------------
+-- Level expression resolution (Raw LVarN -> core LVar Ix)
+-- ---------------------------------------------------------------------------
+
+-- | Resolve named level variables in a level expression to de Bruijn indices.
+--   Level variables must be bound in the context with type VLevelType.
+resolveLevelExpr :: Ctx -> LevelExpr -> Either TypeError LevelExpr
+resolveLevelExpr _ctx LZero       = Right LZero
+resolveLevelExpr ctx  (LSucc le)  = LSucc <$> resolveLevelExpr ctx le
+resolveLevelExpr ctx  (LMax l1 l2) = LMax <$> resolveLevelExpr ctx l1
+                                          <*> resolveLevelExpr ctx l2
+resolveLevelExpr _ctx (LVar ix)   = Right (LVar ix)  -- already resolved
+resolveLevelExpr ctx  (LVarN n)   =
+  case ctxLookup ctx n of
+    Just (ix, VLevelType) -> Right (LVar ix)
+    Just _                -> Left (ExpectedLevel n)
+    Nothing               -> Left (UnboundVar n)
 
 -- ---------------------------------------------------------------------------
 -- Bidirectional type checking
@@ -98,9 +118,28 @@ infer ctx = \case
     let ctx' = ctxBind ctx n aTyVal
     (bTy', bK) <- infer ctx' bTy
     k2 <- ensureType ctx' bK
-    pure (Pi n aTy' bTy', VType (max k1 k2))
+    pure (Pi n aTy' bTy', VType (vlevelMax k1 k2))
 
-  RType k -> pure (Type k, VType (k + 1))
+  RType le -> do
+    le' <- resolveLevelExpr ctx le
+    let vl = evalLevel (ctxEnv ctx) le'
+    -- Type l : Type (lsucc l)
+    pure (Type le', VType (VLSucc vl))
+
+  -- The type Level itself: Level : Type 0
+  RLevel -> pure (TLevel, VType VLZero)
+
+  -- Level constructors in term position
+  RLZero -> pure (TLZero, VLevelType)
+
+  RLSucc r -> do
+    t <- check ctx r VLevelType
+    pure (TLSucc t, VLevelType)
+
+  RLMax r1 r2 -> do
+    t1 <- check ctx r1 VLevelType
+    t2 <- check ctx r2 VLevelType
+    pure (TLMax t1 t2, VLevelType)
 
   RAnn e ty -> do
     ty' <- checkType ctx ty
@@ -208,7 +247,7 @@ infer ctx = \case
     let a1Val = eval (ctxEnv ctx) a1'
     -- P : (b : A) -> Id A a b -> Type
     let pTy = VPi "b" aVal (Closure (ctxEnv ctx)
-                (Pi "_" (TId a' a1' (Var 0)) (Type 0)))
+                (Pi "_" (TId a' a1' (Var 0)) (Type LZero)))
     p'  <- check ctx rawP pTy
     let pVal = eval (ctxEnv ctx) p'
     -- pr : P a (refl A a)
@@ -238,10 +277,10 @@ checkType ctx raw = do
   _ <- ensureType ctx ty
   pure term
 
-ensureType :: Ctx -> Val -> Either TypeError Int
+ensureType :: Ctx -> Val -> Either TypeError VLevel
 ensureType ctx = \case
-  VType k -> pure k
-  other   -> Left (ExpectedType (ctxNames ctx) (quote (ctxLvl ctx) other))
+  VType vl -> pure vl
+  other    -> Left (ExpectedType (ctxNames ctx) (quote (ctxLvl ctx) other))
 
 -- | Look up a constructor by name across all data declarations in context.
 lookupCon :: Ctx -> Name -> Either TypeError ConDecl

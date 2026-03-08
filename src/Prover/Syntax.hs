@@ -13,6 +13,38 @@ type Lvl = Int
 type Name = Text
 
 -- ---------------------------------------------------------------------------
+-- Level expressions (shared between Raw and Term)
+-- ---------------------------------------------------------------------------
+
+-- | A universe level expression. In Raw, variables are named (LVarN).
+--   After elaboration, variable references become de Bruijn indices (LVar Ix).
+data LevelExpr
+  = LZero
+  | LSucc LevelExpr
+  | LMax  LevelExpr LevelExpr
+  | LVar  Ix        -- de Bruijn index (in elaborated terms)
+  | LVarN Name      -- named variable (in raw terms before elaboration)
+  deriving (Show, Eq)
+
+-- | Semantic level values used during NbE.
+data VLevel
+  = VLZero
+  | VLSucc VLevel
+  | VLMax  VLevel VLevel
+  | VLNeutral Lvl   -- neutral level variable (de Bruijn level)
+  deriving (Show, Eq)
+
+-- | Convert a concrete integer to a VLevel.
+vLevelOfInt :: Int -> VLevel
+vLevelOfInt 0 = VLZero
+vLevelOfInt n = VLSucc (vLevelOfInt (n - 1))
+
+-- | Convert a concrete integer to a LevelExpr.
+levelExprOfInt :: Int -> LevelExpr
+levelExprOfInt 0 = LZero
+levelExprOfInt n = LSucc (levelExprOfInt (n - 1))
+
+-- ---------------------------------------------------------------------------
 -- Raw syntax (what the parser produces)
 -- ---------------------------------------------------------------------------
 
@@ -21,7 +53,11 @@ data Raw
   | RLam Name Raw Raw          -- \(x : A) -> e
   | RApp Raw Raw                -- e1 e2
   | RPi Name Raw Raw            -- (x : A) -> B
-  | RType Int                   -- Type n
+  | RType LevelExpr             -- Type l
+  | RLevel                      -- the type Level
+  | RLZero                      -- lzero
+  | RLSucc Raw                  -- lsucc e
+  | RLMax Raw Raw               -- lmax e1 e2
   | RLet Name Raw Raw Raw       -- let x : A = e in body
   | RAnn Raw Raw                -- (e : A)
   | RCon Name [Raw]             -- constructor application: C e1 .. en
@@ -57,7 +93,11 @@ data Term
   | Lam Name Term               -- \x -> e  (type erased, kept in value)
   | App Term Term
   | Pi Name Term Term            -- (x : A) -> B
-  | Type Int
+  | Type LevelExpr               -- Type l  (l is a de Bruijn indexed LevelExpr)
+  | TLevel                       -- the type Level
+  | TLZero                       -- lzero
+  | TLSucc Term                  -- lsucc e
+  | TLMax Term Term              -- lmax e1 e2
   | Let Name Term Term Term      -- let x : A = e in body
   | Con Name [Term]             -- constructor: C t1 .. tn
   | Match Term Term [(Name, Int, Term)]
@@ -86,7 +126,9 @@ data Val
   | VApp Val Val                -- neutral application
   | VLam Name Closure
   | VPi Name Val Closure
-  | VType Int
+  | VType VLevel                -- universe at level l
+  | VLevelType                  -- the type Level
+  | VLevelVal VLevel            -- a level value in term position
   | VCon Name [Val]             -- constructor value
   | VMatch Val Val [(Name, Int, Closure)]
     -- stuck match (scrutinee is neutral)

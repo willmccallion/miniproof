@@ -42,8 +42,8 @@ tests = testGroup "Eval"
       convCheck 1 f etaF @?= True
 
   , testCase "Type quoting" $ do
-      let v = VType 3
-      quote 0 v @?= Type 3
+      let v = VType (VLSucc (VLSucc (VLSucc VLZero)))  -- level 3
+      quote 0 v @?= Type (LSucc (LSucc (LSucc LZero)))
 
   , testCase "fix: double reduces correctly" $ do
       -- double = fix f n = match n with { zero -> zero | succ k -> succ (succ (f k)) }

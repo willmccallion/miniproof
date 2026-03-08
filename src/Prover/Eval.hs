@@ -7,9 +7,72 @@ module Prover.Eval
   , convCheck
   , subtypeOf
   , matchVal
+  , evalLevel
+  , vlevelMax
+  , leLevel
+  , eqLevel
+  , quoteLevel
+  , quoteLevelAsTerm
   ) where
 
 import Prover.Syntax
+
+-- ---------------------------------------------------------------------------
+-- Level expression evaluation and operations
+-- ---------------------------------------------------------------------------
+
+-- | Evaluate a level expression in the current environment.
+--   Level variables (LVar ix) read from the env; if the value is a VVar,
+--   treat it as a neutral level.
+evalLevel :: Env -> LevelExpr -> VLevel
+evalLevel _env LZero       = VLZero
+evalLevel env  (LSucc le)  = VLSucc (evalLevel env le)
+evalLevel env  (LMax l1 l2) = vlevelMax (evalLevel env l1) (evalLevel env l2)
+evalLevel env  (LVar ix)   = case env !! ix of
+  VLevelVal vl -> vl
+  VVar lv      -> VLNeutral lv   -- bound level variable in term env
+  _            -> error "evalLevel: variable is not a level (elaborator bug)"
+evalLevel _env (LVarN _)   = error "evalLevel: unresolved level variable name (elaborator bug)"
+
+-- | Normalized max of two level values.
+vlevelMax :: VLevel -> VLevel -> VLevel
+vlevelMax VLZero v = v
+vlevelMax v VLZero = v
+vlevelMax (VLSucc a) (VLSucc b) = VLSucc (vlevelMax a b)
+vlevelMax a b = VLMax a b
+
+-- | Definitional equality of level values.
+eqLevel :: VLevel -> VLevel -> Bool
+eqLevel VLZero        VLZero        = True
+eqLevel (VLSucc a)    (VLSucc b)    = eqLevel a b
+eqLevel (VLMax a1 b1) (VLMax a2 b2) = eqLevel a1 a2 && eqLevel b1 b2
+eqLevel (VLNeutral x) (VLNeutral y) = x == y
+eqLevel _             _             = False
+
+-- | Subtype ordering on levels: l1 <= l2.
+--   Sound but possibly incomplete for neutral levels.
+leLevel :: VLevel -> VLevel -> Bool
+leLevel l1 l2
+  | eqLevel l1 l2      = True
+leLevel VLZero _       = True   -- 0 <= anything
+leLevel (VLSucc a) (VLSucc b) = leLevel a b
+leLevel (VLMax a b) l2 = leLevel a l2 && leLevel b l2
+leLevel l1 (VLMax a b) = leLevel l1 a || leLevel l1 b
+leLevel _ _            = False
+
+-- | Quote a VLevel back to a LevelExpr (needs current depth for neutrals).
+quoteLevel :: Lvl -> VLevel -> LevelExpr
+quoteLevel _l VLZero         = LZero
+quoteLevel  l (VLSucc vl)    = LSucc (quoteLevel l vl)
+quoteLevel  l (VLMax v1 v2)  = LMax (quoteLevel l v1) (quoteLevel l v2)
+quoteLevel  l (VLNeutral lv) = LVar (l - lv - 1)
+
+-- | Quote a VLevel to a Term (for when a level is a value in term position).
+quoteLevelAsTerm :: Lvl -> VLevel -> Term
+quoteLevelAsTerm _l VLZero         = TLZero
+quoteLevelAsTerm  l (VLSucc vl)    = TLSucc (quoteLevelAsTerm l vl)
+quoteLevelAsTerm  l (VLMax v1 v2)  = TLMax (quoteLevelAsTerm l v1) (quoteLevelAsTerm l v2)
+quoteLevelAsTerm  l (VLNeutral lv) = Var (l - lv - 1)
 
 -- ---------------------------------------------------------------------------
 -- Evaluation (syntax -> values)
@@ -21,7 +84,19 @@ eval env = \case
   Lam n body -> VLam n (Closure env body)
   App f a    -> appVal (eval env f) (eval env a)
   Pi n a b   -> VPi n (eval env a) (Closure env b)
-  Type k     -> VType k
+  Type le    -> VType (evalLevel env le)
+  TLevel     -> VLevelType
+  TLZero     -> VLevelVal VLZero
+  TLSucc t   -> case eval env t of
+    VLevelVal vl -> VLevelVal (VLSucc vl)
+    VVar lv      -> VLevelVal (VLSucc (VLNeutral lv))
+    _            -> error "eval TLSucc: not a level"
+  TLMax t1 t2 -> case (eval env t1, eval env t2) of
+    (VLevelVal v1, VLevelVal v2) -> VLevelVal (vlevelMax v1 v2)
+    (VVar lv1,     VLevelVal v2) -> VLevelVal (vlevelMax (VLNeutral lv1) v2)
+    (VLevelVal v1, VVar lv2)     -> VLevelVal (vlevelMax v1 (VLNeutral lv2))
+    (VVar lv1,     VVar lv2)     -> VLevelVal (vlevelMax (VLNeutral lv1) (VLNeutral lv2))
+    _                            -> error "eval TLMax: not levels"
   Let _ _ e body -> eval (eval env e : env) body
   Con c args -> VCon c (map (eval env) args)
   Match t motive branches ->
@@ -84,7 +159,9 @@ quote l = \case
   VApp f a   -> App (quote l f) (quote l a)
   VLam n cl  -> Lam n (quote (l + 1) (closureApply cl (VVar l)))
   VPi n a cl -> Pi n (quote l a) (quote (l + 1) (closureApply cl (VVar l)))
-  VType k    -> Type k
+  VType vl   -> Type (quoteLevel l vl)
+  VLevelType -> TLevel
+  VLevelVal vl -> quoteLevelAsTerm l vl
   VCon c vs  -> Con c (map (quote l) vs)
   VFix f cl  ->
     -- A VFix should only appear unapplied in neutral position (rare).
@@ -110,12 +187,13 @@ quote l = \case
 -- Conversion checking (are two values definitionally equal?)
 -- ---------------------------------------------------------------------------
 
--- | Universe subtyping: Type k is a subtype of Type j when k <= j.
---   Also covariant in Pi codomains and contravariant in domains (same variance).
+-- | Universe subtyping: Type l1 is a subtype of Type l2 when l1 <= l2.
+--   Also covariant in Pi codomains and contravariant in domains.
 --   Returns True if v1 is a subtype of v2.
 subtypeOf :: Lvl -> Val -> Val -> Bool
 subtypeOf l v1 v2 = case (v1, v2) of
-  (VType k1, VType k2)  -> k1 <= k2
+  (VType vl1, VType vl2) -> leLevel vl1 vl2
+  (VLevelType, VLevelType) -> True
   -- Pi types: contravariant in domain, covariant in codomain.
   -- v1 = Pi x:A1.B1 <= Pi x:A2.B2  iff  A2 <= A1  and  B1 <= B2.
   (VPi _ a1 cl1, VPi _ a2 cl2) ->
@@ -127,7 +205,9 @@ subtypeOf l v1 v2 = case (v1, v2) of
 
 convCheck :: Lvl -> Val -> Val -> Bool
 convCheck l v1 v2 = case (v1, v2) of
-  (VType k1,    VType k2)    -> k1 == k2
+  (VType vl1,   VType vl2)   -> eqLevel vl1 vl2
+  (VLevelType,  VLevelType)  -> True
+  (VLevelVal l1, VLevelVal l2) -> eqLevel l1 l2
   (VVar x,      VVar y)      -> x == y
   (VApp f1 a1,  VApp f2 a2)  -> convCheck l f1 f2 && convCheck l a1 a2
   (VLam _ cl1,  VLam _ cl2)  -> let v = VVar l

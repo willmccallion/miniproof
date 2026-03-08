@@ -36,7 +36,8 @@ braces :: Parser a -> Parser a
 braces = between (symbol "{") (symbol "}")
 
 reserved :: [Text]
-reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with", "fix", "Id", "refl", "J"]
+reserved = ["let", "in", "Type", "forall", "data", "where", "match", "return", "with",
+            "fix", "Id", "refl", "J", "Level", "lzero", "lsucc", "lmax"]
 
 ident :: Parser Text
 ident = lexeme $ try $ do
@@ -44,6 +45,26 @@ ident = lexeme $ try $ do
   if n `elem` reserved
     then fail $ "reserved word: " <> T.unpack n
     else pure n
+
+-- ---------------------------------------------------------------------------
+-- Level expression parser
+-- ---------------------------------------------------------------------------
+
+-- | Parse a level expression (appears after 'Type' keyword or as a term).
+pLevelExpr :: Parser LevelExpr
+pLevelExpr = choice
+  [ LSucc <$ symbol "lsucc" <*> pLevelAtom
+  , try $ LMax <$ symbol "lmax" <*> pLevelAtom <*> pLevelAtom
+  , pLevelAtom
+  ]
+
+pLevelAtom :: Parser LevelExpr
+pLevelAtom = choice
+  [ LZero <$ symbol "lzero"
+  , levelExprOfInt <$> lexeme L.decimal
+  , LVarN <$> ident
+  , parens pLevelExpr
+  ]
 
 -- ---------------------------------------------------------------------------
 -- Raw term parser
@@ -57,6 +78,10 @@ rawTerm = choice [pLam, pLet, pPi, pMatch, pFix, pFunOrApp]
 pAtom :: Parser Raw
 pAtom = choice
   [ RType <$> pType
+  , RLevel <$ symbol "Level"
+  , RLZero <$ symbol "lzero"
+  , try (RLSucc <$> (symbol "lsucc" *> pAtom))
+  , try (RLMax <$> (symbol "lmax" *> pAtom) <*> pAtom)
   , try pId
   , try pRefl
   , try pJ
@@ -99,13 +124,15 @@ identNotDef = try $ do
   notFollowedBy (symbol ":")
   pure n
 
-pType :: Parser Int
+-- | Parse the level after 'Type'. Returns LZero for bare 'Type'.
+pType :: Parser LevelExpr
 pType = lexeme $ do
   _ <- string "Type"
-  -- optional universe level
-  option 0 (try $ do
+  -- optional universe level (only if followed by whitespace then level token)
+  option LZero (try $ do
     _ <- some (char ' ')
-    L.decimal)
+    sc
+    pLevelExpr)
 
 pApp :: Parser Raw
 pApp = foldl1 RApp <$> some pAtom
