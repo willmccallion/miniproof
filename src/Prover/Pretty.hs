@@ -9,10 +9,6 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Prover.Syntax
 
--- ---------------------------------------------------------------------------
--- Pretty-print level expressions
--- ---------------------------------------------------------------------------
-
 prettyLevelExpr :: [Name] -> LevelExpr -> Text
 prettyLevelExpr _ns LZero        = "lzero"
 prettyLevelExpr ns  (LSucc le)   = "lsucc " <> prettyLevelExprAtom ns le
@@ -32,10 +28,6 @@ prettyLevelExprAtom ns le            = prettyLevelExpr ns le
 prettyTypeLevel :: [Name] -> LevelExpr -> Text
 prettyTypeLevel _ns LZero = ""            -- Type 0 is just "Type"
 prettyTypeLevel ns  le    = " " <> prettyLevelExprAtom ns le
-
--- ---------------------------------------------------------------------------
--- Pretty-print core terms (de Bruijn -> named using a name supply)
--- ---------------------------------------------------------------------------
 
 -- | Pretty-print with an initial name context (innermost name first).
 prettyTermNs :: [Name] -> Term -> Text
@@ -113,10 +105,6 @@ freshenName :: [Name] -> Name -> Name
 freshenName ns n
   | n `elem` ns = freshenName ns (n <> "'")
   | otherwise   = n
-
--- ---------------------------------------------------------------------------
--- Pretty-print raw syntax (for error messages)
--- ---------------------------------------------------------------------------
 
 prettyRaw :: Raw -> Text
 prettyRaw = \case

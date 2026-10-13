@@ -12,10 +12,6 @@ type Lvl = Int
 -- | Variable name (for pretty-printing only).
 type Name = Text
 
--- ---------------------------------------------------------------------------
--- Level expressions (shared between Raw and Term)
--- ---------------------------------------------------------------------------
-
 -- | A universe level expression. In Raw, variables are named (LVarN).
 --   After elaboration, variable references become de Bruijn indices (LVar Ix).
 data LevelExpr
@@ -43,10 +39,6 @@ vLevelOfInt n = VLSucc (vLevelOfInt (n - 1))
 levelExprOfInt :: Int -> LevelExpr
 levelExprOfInt 0 = LZero
 levelExprOfInt n = LSucc (levelExprOfInt (n - 1))
-
--- ---------------------------------------------------------------------------
--- Raw syntax (what the parser produces)
--- ---------------------------------------------------------------------------
 
 data Raw
   = RVar Name
@@ -84,10 +76,6 @@ data RItem
   | RData Name Raw [RConDecl]            -- data name : kind where { C1 .. | C2 .. }
   deriving (Show, Eq)
 
--- ---------------------------------------------------------------------------
--- Core syntax (elaborated, de Bruijn indexed)
--- ---------------------------------------------------------------------------
-
 data Term
   = Var Ix
   | Lam Name Term               -- \x -> e  (type erased, kept in value)
@@ -116,10 +104,6 @@ data Term
     -- J A a P pr b p
     -- J : (A:Type) -> (a:A) -> (P:(b:A)->Id A a b->Type) -> P a (refl A a) -> (b:A) -> (p:Id A a b) -> P b p
   deriving (Show, Eq)
-
--- ---------------------------------------------------------------------------
--- Semantic values (used during NbE)
--- ---------------------------------------------------------------------------
 
 data Val
   = VVar Lvl                    -- neutral variable

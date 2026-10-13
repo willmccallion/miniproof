@@ -17,10 +17,6 @@ module Prover.Eval
 
 import Prover.Syntax
 
--- ---------------------------------------------------------------------------
--- Level expression evaluation and operations
--- ---------------------------------------------------------------------------
-
 -- | Evaluate a level expression in the current environment.
 --   Level variables (LVar ix) read from the env; if the value is a VVar,
 --   treat it as a neutral level.
@@ -73,10 +69,6 @@ quoteLevelAsTerm _l VLZero         = TLZero
 quoteLevelAsTerm  l (VLSucc vl)    = TLSucc (quoteLevelAsTerm l vl)
 quoteLevelAsTerm  l (VLMax v1 v2)  = TLMax (quoteLevelAsTerm l v1) (quoteLevelAsTerm l v2)
 quoteLevelAsTerm  l (VLNeutral lv) = Var (l - lv - 1)
-
--- ---------------------------------------------------------------------------
--- Evaluation (syntax -> values)
--- ---------------------------------------------------------------------------
 
 eval :: Env -> Term -> Val
 eval env = \case
@@ -149,10 +141,6 @@ matchVal (VCon c args) _motive branches =
 matchVal scrut motive branches =
   VMatch scrut motive [(c, ar, Closure env b) | (c, ar, env, b) <- branches]
 
--- ---------------------------------------------------------------------------
--- Quoting (values -> normal-form syntax)
--- ---------------------------------------------------------------------------
-
 quote :: Lvl -> Val -> Term
 quote l = \case
   VVar x     -> Var (l - x - 1)    -- level to index
@@ -182,10 +170,6 @@ quote l = \case
   VRefl a x    -> TRefl (quote l a) (quote l x)
   VJ a x p pr b prf -> TJ (quote l a) (quote l x) (quote l p)
                            (quote l pr) (quote l b) (quote l prf)
-
--- ---------------------------------------------------------------------------
--- Conversion checking (are two values definitionally equal?)
--- ---------------------------------------------------------------------------
 
 -- | Universe subtyping: Type l1 is a subtype of Type l2 when l1 <= l2.
 --   Also covariant in Pi codomains and contravariant in domains.

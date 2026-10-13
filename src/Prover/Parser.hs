@@ -16,10 +16,6 @@ import Text.Megaparsec.Char.Lexer qualified as L
 
 type Parser = Parsec Void Text
 
--- ---------------------------------------------------------------------------
--- Lexer
--- ---------------------------------------------------------------------------
-
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "--") (L.skipBlockComment "{-" "-}")
 
@@ -46,10 +42,6 @@ ident = lexeme $ try $ do
     then fail $ "reserved word: " <> T.unpack n
     else pure n
 
--- ---------------------------------------------------------------------------
--- Level expression parser
--- ---------------------------------------------------------------------------
-
 -- | Parse a level expression (appears after 'Type' keyword or as a term).
 pLevelExpr :: Parser LevelExpr
 pLevelExpr = choice
@@ -65,10 +57,6 @@ pLevelAtom = choice
   , LVarN <$> ident
   , parens pLevelExpr
   ]
-
--- ---------------------------------------------------------------------------
--- Raw term parser
--- ---------------------------------------------------------------------------
 
 -- Precedence: let/lam/pi/match bind loosest, application is left-assoc, atoms are tightest.
 
@@ -222,10 +210,6 @@ pBranch = do
   body <- rawTerm
   pure (c, xs, body)
 
--- ---------------------------------------------------------------------------
--- Top-level item parser
--- ---------------------------------------------------------------------------
-
 -- | Wrap a parser result with its starting source position.
 withPos :: Parser Raw -> Parser Raw
 withPos p = do
@@ -273,10 +257,6 @@ flattenFields t           = [("_", t)]
 -- | Parse a file of items (definitions or data declarations).
 pFile :: Parser [RItem]
 pFile = sc *> many (pData <|> pDef) <* eof
-
--- ---------------------------------------------------------------------------
--- Public API
--- ---------------------------------------------------------------------------
 
 parseFile :: Text -> Either String [RItem]
 parseFile input = case parse pFile "<input>" input of

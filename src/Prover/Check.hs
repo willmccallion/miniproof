@@ -19,10 +19,6 @@ import Prover.Eval (eval, quote, appVal, closureApply, convCheck, subtypeOf, mat
                     evalLevel, vlevelMax)
 import Prover.Env
 
--- ---------------------------------------------------------------------------
--- Errors
--- ---------------------------------------------------------------------------
-
 data TypeError
   = UnboundVar Text
   | TypeMismatch [Name] Term Term  -- names, expected, got (as normal forms)
@@ -40,10 +36,6 @@ data TypeError
   | At SourcePos TypeError         -- error with source location
   deriving (Show, Eq)
 
--- ---------------------------------------------------------------------------
--- Level expression resolution (Raw LVarN -> core LVar Ix)
--- ---------------------------------------------------------------------------
-
 -- | Resolve named level variables in a level expression to de Bruijn indices.
 --   Level variables must be bound in the context with type VLevelType.
 resolveLevelExpr :: Ctx -> LevelExpr -> Either TypeError LevelExpr
@@ -57,10 +49,6 @@ resolveLevelExpr ctx  (LVarN n)   =
     Just (ix, VLevelType) -> Right (LVar ix)
     Just _                -> Left (ExpectedLevel n)
     Nothing               -> Left (UnboundVar n)
-
--- ---------------------------------------------------------------------------
--- Bidirectional type checking
--- ---------------------------------------------------------------------------
 
 -- | Check that a raw term has the given type.
 check :: Ctx -> Raw -> Val -> Either TypeError Term
@@ -266,10 +254,6 @@ infer ctx = \case
 
   other -> Left (CannotInfer other)
 
--- ---------------------------------------------------------------------------
--- Helpers
--- ---------------------------------------------------------------------------
-
 -- | Check that a raw term is a valid type (i.e. has type Type k for some k).
 checkType :: Ctx -> Raw -> Either TypeError Term
 checkType ctx raw = do
@@ -434,10 +418,6 @@ extendWithFields ctx (n:ns) (VPi _ dom bCl) = do
   pure (ctx'', dom : rest)
 extendWithFields ctx (_:_) ty =
   Left (ExpectedPi (ctxNames ctx) (quote (ctxLvl ctx) ty))
-
--- ---------------------------------------------------------------------------
--- Top-level program checking
--- ---------------------------------------------------------------------------
 
 -- | Check a sequence of items (definitions or data declarations).
 checkProgram :: [RItem] -> Either TypeError [(Name, Term, Term)]
