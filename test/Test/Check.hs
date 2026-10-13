@@ -51,6 +51,13 @@ tests = testGroup "Check"
         Left _  -> pure ()
         Right _ -> assertFailure "should have been rejected"
 
+  , testCase "J motive with a correctly annotated binder is accepted" $ do
+      let Right defs = parseFile
+            "ok : forall (A : Type) -> forall (a : A) -> forall (b : A) -> Id A a b -> Id A a b = \\(A : Type) -> \\(a : A) -> \\(b : A) -> \\(p : Id A a b) -> J A a (\\(c : A) -> \\(q : Id A a c) -> Id A a c) (refl A a) b p"
+      case checkProgram defs of
+        Left err -> assertFailure $ "type error: " <> show err
+        Right _  -> pure ()
+
   , testCase "unbound variable is rejected" $ do
       let Right defs = parseFile
             "bad : Type = x"

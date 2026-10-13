@@ -233,9 +233,11 @@ infer ctx = \case
     let aVal = eval (ctxEnv ctx) a'
     a1' <- check ctx rawA1 aVal
     let a1Val = eval (ctxEnv ctx) a1'
-    -- P : (b : A) -> Id A a b -> Type
-    let pTy = VPi "b" aVal (Closure (ctxEnv ctx)
-                (Pi "_" (TId a' a1' (Var 0)) (Type LZero)))
+    -- P : (b : A) -> Id A a b -> Type. A and a are quoted one binder deeper,
+    -- since the closure body sits under b.
+    let l = ctxLvl ctx
+        pTy = VPi "b" aVal (Closure (ctxEnv ctx)
+                (Pi "_" (TId (quote (l + 1) aVal) (quote (l + 1) a1Val) (Var 0)) (Type LZero)))
     p'  <- check ctx rawP pTy
     let pVal = eval (ctxEnv ctx) p'
     -- pr : P a (refl A a)
