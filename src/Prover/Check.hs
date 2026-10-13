@@ -57,11 +57,17 @@ check ctx raw expected = case (raw, expected) of
   (RAt pos r, _) ->
     either (Left . At pos) Right (check ctx r expected)
 
-  -- Lambda introduction: check body under extended context
-  (RLam n _aTy body, VPi _ aTyVal bCl) -> do
-    let ctx' = ctxBind ctx n aTyVal
-    body' <- check ctx' body (closureApply bCl (VVar (ctxLvl ctx)))
-    pure (Lam n body')
+  -- Lambda introduction. The binder's annotation must accept every value of
+  -- the expected domain (Pi types are contravariant in the domain).
+  (RLam n aTy body, VPi _ domain bCl) -> do
+    aTy' <- checkType ctx aTy
+    let annotated = eval (ctxEnv ctx) aTy'
+        l = ctxLvl ctx
+    if subtypeOf l domain annotated
+      then do
+        body' <- check (ctxBind ctx n annotated) body (closureApply bCl (VVar l))
+        pure (Lam n body')
+      else Left (TypeMismatch (ctxNames ctx) (quote l domain) (quote l annotated))
 
   -- Let
   (RLet n aTy e body, expected') -> do

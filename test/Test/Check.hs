@@ -51,6 +51,31 @@ tests = testGroup "Check"
         Left _  -> pure ()
         Right _ -> assertFailure "should have been rejected"
 
+  , testCase "lambda annotation that disagrees with the expected domain is rejected" $ do
+      let Right defs = parseFile
+            "bad : forall (A : Type) -> forall (B : Type) -> A -> A = \\(A : Type) -> \\(B : Type) -> \\(a : B) -> a"
+      case checkProgram defs of
+        Left err -> case rootError err of
+          TypeMismatch {} -> pure ()
+          e -> assertFailure $ "wrong error: " <> show e
+        Right _ -> assertFailure "should have been rejected"
+
+  , testCase "lambda annotation may be a supertype of the expected domain" $ do
+      let Right defs = parseFile
+            "lift : Type -> Type 1 = \\(X : Type 1) -> X"
+      case checkProgram defs of
+        Left err -> assertFailure $ "type error: " <> show err
+        Right _  -> pure ()
+
+  , testCase "J motive whose binder annotation names the wrong equality is rejected" $ do
+      let Right defs = parseFile
+            "bad : forall (A : Type) -> forall (a : A) -> forall (b : A) -> Id A a b -> Id A a b = \\(A : Type) -> \\(a : A) -> \\(b : A) -> \\(p : Id A a b) -> J A a (\\(c : A) -> \\(q : Id A c a) -> Id A a c) (refl A a) b p"
+      case checkProgram defs of
+        Left err -> case rootError err of
+          TypeMismatch {} -> pure ()
+          e -> assertFailure $ "wrong error: " <> show e
+        Right _ -> assertFailure "should have been rejected"
+
   , testCase "J motive with a correctly annotated binder is accepted" $ do
       let Right defs = parseFile
             "ok : forall (A : Type) -> forall (a : A) -> forall (b : A) -> Id A a b -> Id A a b = \\(A : Type) -> \\(a : A) -> \\(b : A) -> \\(p : Id A a b) -> J A a (\\(c : A) -> \\(q : Id A a c) -> Id A a c) (refl A a) b p"
